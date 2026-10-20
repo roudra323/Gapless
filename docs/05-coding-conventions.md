@@ -27,17 +27,17 @@ These are rules. If one blocks you, raise it. Don't work around it.
 
 ## Naming
 
-| Thing | Style | Example |
-|---|---|---|
-| Files | kebab-case + role suffix | `transfers.controller.ts`, `range-planner.ts`, `range-planner.spec.ts` |
-| Classes, types | PascalCase | `TransferRepository`, `TransferRow` |
-| Functions, variables | camelCase | `planNextRange` |
-| Constants | UPPER_SNAKE | `MAX_PAGE_SIZE` |
-| Env vars | UPPER_SNAKE | `RPC_HTTP_URL` |
-| DB tables and columns | snake_case, plural tables | `transfers.block_number` |
-| Metrics | `gapless_<area>_<name>_<unit>` | `gapless_indexer_batch_duration_seconds` |
-| Error codes | UPPER_SNAKE | `INVALID_CURSOR` |
-| Workspace packages | `@gapless/<name>` | `@gapless/db` |
+| Thing                 | Style                          | Example                                                                |
+| --------------------- | ------------------------------ | ---------------------------------------------------------------------- |
+| Files                 | kebab-case + role suffix       | `transfers.controller.ts`, `range-planner.ts`, `range-planner.spec.ts` |
+| Classes, types        | PascalCase                     | `TransferRepository`, `TransferRow`                                    |
+| Functions, variables  | camelCase                      | `planNextRange`                                                        |
+| Constants             | UPPER_SNAKE                    | `MAX_PAGE_SIZE`                                                        |
+| Env vars              | UPPER_SNAKE                    | `RPC_HTTP_URL`                                                         |
+| DB tables and columns | snake_case, plural tables      | `transfers.block_number`                                               |
+| Metrics               | `gapless_<area>_<name>_<unit>` | `gapless_indexer_batch_duration_seconds`                               |
+| Error codes           | UPPER_SNAKE                    | `INVALID_CURSOR`                                                       |
+| Workspace packages    | `@gapless/<name>`              | `@gapless/db`                                                          |
 
 ## NestJS structure
 
