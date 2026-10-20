@@ -8,18 +8,18 @@ The app is deliberately small. The engineering quality is the point: correctness
 
 ## Read before working
 
-| When you are… | Read |
-|---|---|
-| Starting any task | `docs/01-overview-and-roadmap.md` (find the current phase) |
-| Touching structure or data flow | `docs/02-architecture.md` |
-| Touching the indexer | `docs/03-indexer-design.md` (**mandatory**) |
-| Adding or upgrading a dependency or tool | `docs/04-tech-stack-and-versions.md` |
-| Writing any code | `docs/05-coding-conventions.md` |
-| Writing tests | `docs/06-testing.md` |
-| Docker, Helm, Kubernetes, Terraform | `docs/07-infrastructure.md` |
-| GitHub Actions | `docs/08-ci-cd.md` |
-| Metrics, logs, dashboards, alerts | `docs/09-observability.md` |
-| Changing a recorded decision | `docs/adr/` |
+| When you are…                            | Read                                                       |
+| ---------------------------------------- | ---------------------------------------------------------- |
+| Starting any task                        | `docs/01-overview-and-roadmap.md` (find the current phase) |
+| Touching structure or data flow          | `docs/02-architecture.md`                                  |
+| Touching the indexer                     | `docs/03-indexer-design.md` (**mandatory**)                |
+| Adding or upgrading a dependency or tool | `docs/04-tech-stack-and-versions.md`                       |
+| Writing any code                         | `docs/05-coding-conventions.md`                            |
+| Writing tests                            | `docs/06-testing.md`                                       |
+| Docker, Helm, Kubernetes, Terraform      | `docs/07-infrastructure.md`                                |
+| GitHub Actions                           | `docs/08-ci-cd.md`                                         |
+| Metrics, logs, dashboards, alerts        | `docs/09-observability.md`                                 |
+| Changing a recorded decision             | `docs/adr/`                                                |
 
 ## Non-negotiable rules
 
