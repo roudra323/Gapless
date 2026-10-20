@@ -1,0 +1,74 @@
+# 04 — Tech Stack & Version Policy
+
+_Last reviewed: 2026-10-21. Re-review whenever a phase starts._
+
+## Version policy
+
+1. **Latest stable, verified, not remembered.** Before adding or upgrading anything, check the actual current stable version (`pnpm view <pkg> version`, the GitHub releases page, or official docs). Never install pre-release, beta, `next`, or `canary` tags.
+2. **Pin exactly.** Use exact versions in `package.json` (`save-exact=true` in `.npmrc`). Docker base images are pinned by **digest**, GitHub Actions by **full commit SHA**, and Helm charts by exact chart version. Terraform providers use `~>` on the major and are locked by `.terraform.lock.hcl`.
+3. **Cool-down for fresh releases.** Set pnpm `minimumReleaseAge` (for example 3 days) and Renovate `minimumReleaseAge` so a freshly published, possibly compromised package version isn't pulled automatically.
+4. **Renovate keeps the repo current.** It groups non-major updates weekly. Major updates arrive as separate PRs that are read and tested, never auto-merged.
+5. **Lifecycle scripts blocked by default.** pnpm 10+ blocks dependency install scripts. Allow them only explicitly via `onlyBuiltDependencies`.
+
+## The stack
+
+| Area | Choice | Notes |
+|---|---|---|
+| Runtime | **Node.js 24 (Active LTS)** | The skeleton `.nvmrc` holds `24`; Phase 0 pins the exact 24.x version. Node 26 enters LTS on **2026-10-28**. Once it does and dependencies support it, bump `.nvmrc`, `engines`, the Dockerfiles, and CI in one PR. |
+| Package manager | **pnpm 10.x** (via Corepack `packageManager` field) | Workspaces. No Turborepo or Nx; `pnpm -r` builds topologically. |
+| Language | **TypeScript 6.x** as the `typescript` package | TS 7.0 (native Go compiler) is stable but has **no programmatic API until 7.1**. The NestJS CLI and other tooling need that API. Keep `tsconfig` free of every 6.0 deprecation so moving to 7 is trivial. Optionally run `tsgo --noEmit` in CI for fast type checks. |
+| Module system | **ESM** (`"type": "module"`, `module`/`moduleResolution: NodeNext`) | NestJS 12 ships ESM-first. No CommonJS anywhere. |
+| Framework | **NestJS 12.x** (Express 5 platform adapter) | Use Nest 12's native Standard Schema validation on `@Body/@Query/@Param` with Zod. Don't use class-validator or class-transformer. |
+| Validation | **Zod 4.x** | Env config and request validation. |
+| Chain client | **viem 2.x** | Not ethers or web3.js. |
+| Database | **PostgreSQL 18** (local); Cloud SQL newest supported major (18 if available, else 17, and match it locally) | |
+| ORM / migrations | **Drizzle ORM + drizzle-kit** | SQL-first. Generated migrations are committed. |
+| Cache | **Redis 8** server + **node-redis** (`redis` package, v5+) client | Cache only. Losing it must never lose data. |
+| Logging | **pino** via **nestjs-pino** | JSON to stdout. `pino-pretty` only in local dev. |
+| Metrics | **prom-client** | Explicit, documented metrics (`docs/09`). Don't adopt `@nestjs/observe` without an ADR. |
+| Testing | **Vitest** + **Testcontainers** + **anvil** + **supertest** | NestJS 12 ESM projects default to Vitest. |
+| Lint / format | **oxlint** + **Prettier** | NestJS 12 ESM default linter is oxlint. Enable type-aware rules if the installed oxlint supports them. |
+| Git hooks | **lefthook** | pre-commit: format + lint on staged files. |
+| Contracts | **Foundry** (forge, anvil, cast), **Solidity 0.8.x latest**, **OpenZeppelin Contracts 5.x** | |
+| Containers | Docker BuildKit, **Compose Specification** (`docker compose`, no `version:` key) | Runtime image: distroless Node or `node:24-slim`, non-root. |
+| Local K8s | **kind** | Node image matching the GKE cluster's minor version. |
+| Ingress | **Gateway API** (standard channel, pinned CRD version) | Local: **Envoy Gateway**. GKE: built-in GKE Gateway controller (`gke-l7-global-external-managed`). |
+| Packaging | **Helm 4** | Validate with `helm lint` + `kubeconform`. |
+| Monitoring | **kube-prometheus-stack** (Prometheus Operator, Prometheus, Grafana, Alertmanager) | `ServiceMonitor` + `PrometheusRule` CRDs. Dashboards as JSON in the repo. |
+| Secrets in cluster | **External Secrets Operator** → GCP Secret Manager (Workload Identity) | Locally: a plain K8s Secret from `.env`, never committed. |
+| Cloud | **GCP**: GKE **Standard** (zonal, REGULAR release channel), Cloud SQL, Artifact Registry, Secret Manager | See `adr/0002`. |
+| IaC | **Terraform** (latest 1.x) + `hashicorp/google` provider (latest major) | Remote state in GCS. |
+| CI/CD | **GitHub Actions** with **Workload Identity Federation** (OIDC) | No JSON service-account keys anywhere. |
+| Dependency updates | **Renovate** | |
+
+## Banned (deprecated, retired, or legacy). Don't introduce them.
+
+| Don't use | Use instead | Why |
+|---|---|---|
+| ingress-nginx / `Ingress` resources | Gateway API (`Gateway`, `HTTPRoute`) | ingress-nginx was retired in March 2026; the Ingress API is frozen. |
+| Bitnami Helm charts or images | Official images and operators, or our own small manifests | Bitnami's free catalog changed in 2025; legacy images are unmaintained. |
+| CommonJS, `require`, `__dirname` | ESM, `import.meta.dirname` | |
+| Jest, ts-jest | Vitest | |
+| ESLint + typescript-eslint (in this repo) | oxlint | Keep one linter. |
+| ts-node | `tsx` for scripts, or Node's native type stripping where no decorators are involved | |
+| class-validator, class-transformer | Zod via Standard Schema | One validation system. |
+| TypeORM, Sequelize, Prisma | Drizzle | Decision fixed. |
+| ethers, web3.js | viem | |
+| axios, node-fetch, request | global `fetch` | |
+| lodash, moment, date-fns (by default) | language built-ins, `Intl`, `Temporal` once available on the runtime | |
+| `ioredis` | `redis` (node-redis) | One client. |
+| `docker-compose` v1, `version:` in compose files | `docker compose` v2 | |
+| `:latest` image tags | Git SHA tags + digests | |
+| Long-lived GCP service-account JSON keys | Workload Identity Federation / Workload Identity | |
+| `kubectl apply` of app manifests in CI | `helm upgrade` | |
+| PodSecurityPolicy, Docker-shim era docs | Pod Security Admission (`restricted` profile) | |
+| Webpack | `tsc` builds (Nest default for standard projects) | |
+| `drizzle-kit push` on shared DBs | `drizzle-kit generate` + committed SQL migrations | |
+| Offset pagination | Keyset (cursor) pagination | |
+
+If a library you want isn't listed in either table, check that it's actively maintained (release within ~6 months, ESM support, no deprecation notice) and add it to the stack table with a one-line reason.
+
+## Decision log
+Major decisions are in `docs/adr/`. Summary:
+- ADR-0001: pull-based indexing with the WebSocket as a trigger only.
+- ADR-0002: GKE Standard (not Autopilot) + Gateway API.
