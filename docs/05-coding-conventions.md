@@ -92,7 +92,7 @@ These are rules. If one blocks you, raise it. Don't work around it.
 
 ## Git
 
-- **Conventional Commits:** `feat|fix|refactor|perf|test|docs|build|ci|chore(scope): summary`. Scopes: `indexer`, `api`, `db`, `chain`, `config`, `obs`, `contracts`, `helm`, `infra`, `ci`, `docs`.
+- **Conventional Commits:** `feat|fix|refactor|perf|test|docs|build|ci|chore(scope): summary`. Scopes: `indexer`, `api`, `db`, `chain`, `config`, `obs`, `contracts`, `helm`, `infra`, `ci`, `docs`, `deps` (dependency updates, including Renovate), `repo` (root tooling and workspace config). The scope is optional. A lefthook `commit-msg` hook runs commitlint (`commitlint.config.ts`) to enforce these lists; keep them in sync.
 - Branches: `feat/<short-name>`, `fix/<short-name>`.
 - Small PRs: one concern each. Infrastructure changes and app changes go in separate PRs where possible.
 - Never commit generated build output, `.env`, `*.tfstate`, or kubeconfigs. Keep `.gitignore` complete.

@@ -8,3 +8,8 @@ pre-commit:
     - name: lint
       glob: '*.{ts,js}'
       run: pnpm exec oxlint {staged_files}
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: pnpm exec commitlint --edit {1}
