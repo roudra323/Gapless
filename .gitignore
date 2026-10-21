@@ -14,7 +14,7 @@ coverage/
 contracts/out/
 contracts/cache/
 contracts/broadcast/
-contracts/lib/
+contracts/dependencies/
 
 # Terraform
 .terraform/

@@ -1,5 +1,5 @@
 pnpm-lock.yaml
 dist/
 coverage/
-contracts/lib/
+contracts/dependencies/
 contracts/out/
