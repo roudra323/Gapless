@@ -39,7 +39,7 @@ Every phase should move toward making this demo work.
 
 Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N passes.**
 
-**Current status:** skeleton created (folders, docs, `.editorconfig`, `.gitignore`, `.nvmrc`, `.env.example`). **Phase 0 not started.** Update this line when a phase passes.
+**Current status:** **Phase 0 done (2026-10-21).** Next: Phase 1 (contracts & local chain). Update this line when a phase passes.
 
 ### Phase 0 — Repo foundation
 

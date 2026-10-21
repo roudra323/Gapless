@@ -59,7 +59,7 @@ gapless/
 ├── CLAUDE.md
 ├── README.md
 ├── .editorconfig  .gitignore  .nvmrc  .env.example
-├── package.json  pnpm-workspace.yaml  tsconfig.base.json  (P0)
+├── package.json  pnpm-workspace.yaml  tsconfig.base.json
 ├── docs/                      # these documents + adr/ (+ runbooks.md, P8)
 ├── apps/
 │   ├── indexer/
@@ -96,9 +96,9 @@ gapless/
 │   ├── bootstrap/             # state bucket (run once)
 │   └── envs/dev/              # the real environment
 ├── .github/workflows/
-├── renovate.json              (P0)
+├── renovate.json
 ├── docker-compose.yml         (P1)
-└── Makefile                   (P0, targets added per phase)
+└── Makefile                   # targets added per phase
 ```
 
 ## Data model (Postgres, via Drizzle)
