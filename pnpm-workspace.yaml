@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+saveExact: true
+engineStrict: true
+minimumReleaseAge: 4320 # minutes = 3 days
+allowBuilds:
+  lefthook: false

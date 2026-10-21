@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "docker:pinDigests",
+    "group:allNonMajor",
+    "schedule:weekly"
+  ],
+  "minimumReleaseAge": "3 days",
+  "packageRules": [
+    {
+      "description": "Keep Node types on the runtime major; bump with .nvmrc in one PR (docs/04).",
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "24.x"
+    }
+  ]
+}

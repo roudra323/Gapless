@@ -43,7 +43,7 @@ Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N 
 
 ### Phase 0 — Repo foundation
 
-- Root `package.json` (`packageManager`, `engines`, scripts), `pnpm-workspace.yaml`, `.npmrc`, `tsconfig.base.json`, oxlint, Prettier, Vitest, lefthook, `renovate.json`, Makefile.
+- Root `package.json` (`packageManager`, `engines`, scripts), `pnpm-workspace.yaml` (workspace and pnpm settings), `tsconfig.base.json`, oxlint, Prettier, Vitest, lefthook, `renovate.json`, Makefile.
 - Pin the exact Node 24.x version in `.nvmrc` (it holds only the major in the skeleton).
 - CI workflow `ci.yml` with the `quality` and `unit` jobs only (see `docs/08`).
 - ✅ Done when a fresh clone passes `pnpm install && pnpm lint && pnpm typecheck && pnpm test`, and CI is green.
