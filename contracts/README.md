@@ -18,7 +18,7 @@ forge fmt --check
 
 ## Deploy and generate transfers (local anvil)
 
-Start a chain with `anvil` (or `pnpm dev:deps` once Phase 1 adds the compose file). anvil prints its funded accounts; account 0's key is public and only for local use. On a public chain, sign with a keystore (`--account <name>`), never a raw key.
+Start a chain with `pnpm dev:deps` (from the repo root), or run `anvil` directly. anvil prints its funded accounts; account 0's key is public and only for local use. On a public chain, sign with a keystore (`--account <name>`), never a raw key.
 
 ```bash
 # 1. Deploy. The signer becomes the owner. Copy TOKEN_ADDRESS and START_BLOCK into .env.
