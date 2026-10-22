@@ -39,7 +39,7 @@ Every phase should move toward making this demo work.
 
 Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N passes.**
 
-**Current status:** **Phase 0 done (2026-10-21).** Next: Phase 1 (contracts & local chain). Update this line when a phase passes.
+**Current status:** **Phase 1 done (2026-10-23).** Next: Phase 2 (database package). Update this line when a phase passes.
 
 ### Phase 0 — Repo foundation
 
