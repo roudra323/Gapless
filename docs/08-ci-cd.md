@@ -7,7 +7,7 @@
 - `concurrency` groups: cancel superseded PR runs; **never** cancel an in-progress deploy (`cancel-in-progress: false` for deploy).
 - No secrets in logs. No long-lived GCP keys. GCP auth is only via `google-github-actions/auth` with Workload Identity Federation.
 - Node version comes from `.nvmrc`; pnpm comes from the `packageManager` field. Cache the pnpm store.
-- Use path filters, so infra jobs run only when `infra/**` changes and contract jobs only when `contracts/**` changes.
+- Use path filters, so infra jobs run only when `infra/**` changes and contract jobs only when `contracts/**` changes. Filter **inside the job** (a `git diff` step against the PR base or the previous push, with later steps gated on its output), not with workflow-level `paths:`. The job then always reports a status, so branch protection can require it. A job with a filter also runs when its own workflow file changes.
 
 ## Workflows
 

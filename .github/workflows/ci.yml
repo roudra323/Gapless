@@ -46,3 +46,40 @@ jobs:
           node-version-file: .nvmrc
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # Path filter inside the job (not on the workflow), so the job always reports
+      # a status and branch protection can require it.
+      - id: changes
+        working-directory: .
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+            || ! git diff --quiet "$BASE" HEAD -- contracts/ .github/workflows/ci.yml; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changes.outputs.run == 'true'
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: v1.8.6
+      - if: steps.changes.outputs.run == 'true'
+        run: forge soldeer install
+      - if: steps.changes.outputs.run == 'true'
+        run: forge fmt --check
+      - if: steps.changes.outputs.run == 'true'
+        run: forge build
+      - if: steps.changes.outputs.run == 'true'
+        run: forge test
