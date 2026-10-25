@@ -4,7 +4,7 @@ Gapless is a **resilient ERC-20 Transfer indexer + read API**, deployed on **Kub
 
 The app is deliberately small. The engineering quality is the point: correctness under failure, clean infrastructure, real observability. Treat every change as if it were going to production.
 
-**Status:** skeleton only. The folder tree and docs exist; no code or tool config yet. Current phase: see `docs/01-overview-and-roadmap.md`.
+**Status:** see the "Current status" line in `docs/01-overview-and-roadmap.md` (the single source of truth for the current phase).
 
 ## Read before working
 
@@ -37,7 +37,7 @@ The app is deliberately small. The engineering quality is the point: correctness
 
 ## Commands (target — keep this section accurate)
 
-None of these exist yet. Each one is added in the phase shown. When you add one, make it work exactly as described here, or update this list.
+Commands for completed phases exist; the rest are added in the phase shown. When you add one, make it work exactly as described here, or update this list.
 
 ```bash
 # Phase 0

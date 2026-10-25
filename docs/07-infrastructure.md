@@ -19,6 +19,7 @@ One Dockerfile per app (`apps/<app>/Dockerfile`), with the build context at the 
 ### docker-compose.yml (local dev)
 
 - Default services: `postgres` (18), `redis` (8), `anvil` (the official Foundry image). All have health checks.
+- Host ports are bound to `127.0.0.1` only: postgres `15432`, redis `16379` (non-default, so they don't clash with local installs), anvil `8545`. `.env.example` uses these ports.
 - `--profile app` adds `indexer` and `api` built from the Dockerfiles, for a full-stack smoke test.
 
 ## Kubernetes manifests (Helm chart: `deploy/helm/gapless`)

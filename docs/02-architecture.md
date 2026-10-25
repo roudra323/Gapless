@@ -97,7 +97,7 @@ gapless/
 │   └── envs/dev/              # the real environment
 ├── .github/workflows/
 ├── renovate.json
-├── docker-compose.yml         (P1)
+├── docker-compose.yml
 └── Makefile                   # targets added per phase
 ```
 
