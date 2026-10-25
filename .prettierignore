@@ -3,3 +3,4 @@ dist/
 coverage/
 contracts/dependencies/
 contracts/out/
+packages/db/migrations/
