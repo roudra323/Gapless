@@ -97,6 +97,7 @@ These are rules. If one blocks you, raise it. Don't work around it.
 - Branches: `feat/<short-name>`, `fix/<short-name>`.
 - Small PRs: one concern each. Infrastructure changes and app changes go in separate PRs where possible.
 - Never commit generated build output, `.env`, `*.tfstate`, or kubeconfigs. Keep `.gitignore` complete.
+- Editor: `.vscode/settings.json` makes Prettier the formatter on save for every language in the repo and keeps the final newline. Language-specific user settings override a plain workspace default, so keep the per-language entries. The lefthook `pre-commit` hook runs Prettier on staged files as a second check.
 
 ## Comments and docs
 

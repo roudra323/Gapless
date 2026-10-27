@@ -36,3 +36,4 @@ deploy/helm/*/charts/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json

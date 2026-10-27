@@ -59,6 +59,7 @@ gapless/
 ├── CLAUDE.md
 ├── README.md
 ├── .editorconfig  .gitignore  .nvmrc  .env.example
+├── .vscode/                   # shared editor settings: Prettier on save, final newline
 ├── package.json  pnpm-workspace.yaml  tsconfig.base.json
 ├── docs/                      # these documents + adr/ (+ runbooks.md, P8)
 ├── apps/
