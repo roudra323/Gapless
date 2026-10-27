@@ -18,7 +18,7 @@
 | `quality`     | install (`--frozen-lockfile`) → `pnpm lint` → `pnpm format:check` → `pnpm typecheck`                                                                                           | 0              |
 | `unit`        | `pnpm test`                                                                                                                                                                    | 0              |
 | `contracts`   | Foundry toolchain → `forge fmt --check` → `forge build` → `forge test`                                                                                                         | 1              |
-| `integration` | `pnpm test:integration` (Testcontainers uses the runner's Docker; install Foundry for anvil)                                                                                   | 2              |
+| `integration` | `pnpm test:integration` (Testcontainers uses the runner's Docker). Phase 3 adds the Foundry toolchain for anvil.                                                               | 2              |
 | `images`      | `docker buildx build` both apps (no push), with the GitHub Actions cache backend; fail if the image exceeds the size budget                                                    | 7              |
 | `manifests`   | `helm lint` + `helm template` for each values file, piped to `kubeconform -strict` (with the CRD schema catalog for HTTPRoute, ServiceMonitor, PrometheusRule, ExternalSecret) | 8              |
 | `terraform`   | `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `tflint`                                                                             | 9              |
