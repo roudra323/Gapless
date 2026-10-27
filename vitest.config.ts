@@ -1,8 +1,8 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    // No test files exist until Phase 2; keep `pnpm test` green on the skeleton.
-    passWithNoTests: true,
+    // Integration tests need Docker; they run with `pnpm test:integration` (vitest.integration.config.ts).
+    exclude: [...configDefaults.exclude, '**/*.int.spec.ts'],
   },
 });

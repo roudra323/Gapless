@@ -71,6 +71,7 @@ These are rules. If one blocks you, raise it. Don't work around it.
 - Required context fields in the indexer: `chainId`, `fromBlock`, `toBlock` (where relevant).
 - Levels: `fatal` (process exiting), `error` (a failed operation needing attention), `warn` (recovered or degraded: reorg, retry exhausted for one attempt, cache down), `info` (lifecycle and batch summaries), `debug` (per-request detail, off in production).
 - Don't log per-event lines at `info`. Log one summary line per batch.
+- **Temporary exception (until Phase 6):** `packages/db/src/bin/migrate.ts` writes plain text with `process.stderr.write` / `process.stdout.write`, because no shared logger exists yet. In Phase 6, when `@gapless/observability` provides the pino logger config, switch this bin to it (structured fields, `fatal` on failure, `DATABASE_URL` redacted) and delete this bullet.
 
 ## Async and concurrency
 
@@ -96,6 +97,7 @@ These are rules. If one blocks you, raise it. Don't work around it.
 - Branches: `feat/<short-name>`, `fix/<short-name>`.
 - Small PRs: one concern each. Infrastructure changes and app changes go in separate PRs where possible.
 - Never commit generated build output, `.env`, `*.tfstate`, or kubeconfigs. Keep `.gitignore` complete.
+- Editor: `.vscode/settings.json` makes Prettier the formatter on save for every language in the repo and keeps the final newline. Language-specific user settings override a plain workspace default, so keep the per-language entries. The lefthook `pre-commit` hook runs Prettier on staged files as a second check.
 
 ## Comments and docs
 

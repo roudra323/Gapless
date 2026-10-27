@@ -2,7 +2,7 @@
 
 A resilient ERC-20 `Transfer` indexer and read API: no gaps, no duplicates, survives WebSocket drops, RPC errors, reorgs, and restarts. Runs on Kubernetes (kind locally, GKE in the cloud) with Terraform, GitHub Actions, and Prometheus/Grafana.
 
-> **Status:** Phase 1 (contracts & local chain) done. Next: Phase 2 (database package). See [`docs/01-overview-and-roadmap.md`](docs/01-overview-and-roadmap.md).
+> **Status:** Phase 2 (database package) done. Next: Phase 3 (indexer core). See [`docs/01-overview-and-roadmap.md`](docs/01-overview-and-roadmap.md).
 
 ## Docs
 
