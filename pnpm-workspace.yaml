@@ -8,3 +8,8 @@ minimumReleaseAge: 4320 # minutes = 3 days
 allowBuilds:
   lefthook: false
   esbuild: false
+  # Testcontainers (dev only). ssh2 and cpu-features build optional native bindings that
+  # ssh2 does not need; protobufjs only prints a version-scheme warning.
+  cpu-features: false
+  protobufjs: false
+  ssh2: false

@@ -24,10 +24,11 @@ const { db, close } = createDb({
 
 ## Commands
 
-| Command            | What it does                                                                    |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `pnpm db:generate` | Diff `src/schema.ts` against `migrations/meta` and write a new SQL migration    |
-| `pnpm db:migrate`  | Build, then apply pending migrations to `DATABASE_URL` (root `.env` if present) |
+| Command                 | What it does                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm db:generate`      | Diff `src/schema.ts` against `migrations/meta` and write a new SQL migration                                                  |
+| `pnpm db:migrate`       | Build, then apply pending migrations to `DATABASE_URL` (root `.env` if present)                                               |
+| `pnpm test:integration` | Start Postgres 18 in Docker (Testcontainers), apply the migrations, and test every constraint and index (`test/integration/`) |
 
 ## Rules
 
