@@ -34,7 +34,7 @@ describe('loadConfig with dbConfigSchema', () => {
 
   it('reports a missing key', () => {
     const error = captureConfigError({});
-    expect(error.issues.map((issue) => issue.key)).toEqual(['DATABASE_URL']);
+    expect(error.issues).toEqual([{ key: 'DATABASE_URL', message: 'is required' }]);
   });
 
   it.each([
@@ -43,7 +43,7 @@ describe('loadConfig with dbConfigSchema', () => {
     ['empty string', ''],
   ])('reports a malformed value (%s)', (_label, value) => {
     const error = captureConfigError({ DATABASE_URL: value });
-    expect(error.issues.map((issue) => issue.key)).toEqual(['DATABASE_URL']);
+    expect(error.issues).toEqual([{ key: 'DATABASE_URL', message: 'must be a postgres:// URL' }]);
   });
 
   it('never puts the value in the error', () => {
