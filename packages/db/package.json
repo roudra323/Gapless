@@ -14,14 +14,17 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "migrations"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=../../.env dist/bin/migrate.js"
   },
   "dependencies": {
+    "@gapless/config": "workspace:*",
     "drizzle-orm": "0.45.4",
     "pg": "8.23.1"
   },
