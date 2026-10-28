@@ -13,15 +13,15 @@
 
 ### `ci.yml`: on `pull_request` and `push` to `main`
 
-| Job           | Steps                                                                                                                                                                          | Added in phase |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
-| `quality`     | install (`--frozen-lockfile`) → `pnpm lint` → `pnpm format:check` → `pnpm typecheck`                                                                                           | 0              |
-| `unit`        | `pnpm test`                                                                                                                                                                    | 0              |
-| `contracts`   | Foundry toolchain → `forge fmt --check` → `forge build` → `forge test`                                                                                                         | 1              |
-| `integration` | `pnpm test:integration` (Testcontainers uses the runner's Docker). Phase 3 adds the Foundry toolchain for anvil.                                                               | 2              |
-| `images`      | `docker buildx build` both apps (no push), with the GitHub Actions cache backend; fail if the image exceeds the size budget                                                    | 7              |
-| `manifests`   | `helm lint` + `helm template` for each values file, piped to `kubeconform -strict` (with the CRD schema catalog for HTTPRoute, ServiceMonitor, PrometheusRule, ExternalSecret) | 8              |
-| `terraform`   | `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `tflint`                                                                             | 9              |
+| Job           | Steps                                                                                                                                                                                                                      | Added in phase |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `quality`     | install (`--frozen-lockfile`) → `pnpm lint` → `pnpm format:check` → `pnpm typecheck`                                                                                                                                       | 0              |
+| `unit`        | `pnpm test`                                                                                                                                                                                                                | 0              |
+| `contracts`   | Foundry toolchain → `forge fmt --check` → `forge build` → `forge test`                                                                                                                                                     | 1              |
+| `integration` | `pnpm test:integration` (Testcontainers uses the runner's Docker for Postgres and anvil). From Phase 3, install the Foundry toolchain and run `forge build`, because the tests deploy `MockToken` from its build artifact. | 2              |
+| `images`      | `docker buildx build` both apps (no push), with the GitHub Actions cache backend; fail if the image exceeds the size budget                                                                                                | 7              |
+| `manifests`   | `helm lint` + `helm template` for each values file, piped to `kubeconform -strict` (with the CRD schema catalog for HTTPRoute, ServiceMonitor, PrometheusRule, ExternalSecret)                                             | 8              |
+| `terraform`   | `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `tflint`                                                                                                                         | 9              |
 
 Add each job in the phase that brings its tool, not before. Branch protection on `main` requires every job that exists to pass. `deploy.yml` and `infra.yml` are added in phase 9.
 

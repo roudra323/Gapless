@@ -63,22 +63,23 @@ Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N 
 
 - Range processing, checkpointing, idempotent writes, and batch-size adaptation (see `docs/03`).
 - HTTP-only at this stage, using polling.
-- ✅ Done when an integration test (anvil + testcontainers) indexes 500 transfers with exact parity to the chain.
+- pino structured logs: the shared logger config in `packages/observability` (see `docs/09` "Logs"), used by the indexer through nestjs-pino and by the migrate entrypoint.
+- ✅ Done when an integration test (anvil + testcontainers) indexes 500 transfers with exact parity to the chain, and the indexer logs JSON with the required fields.
 
 ### Phase 4 — Indexer resilience
 
-- WebSocket head trigger, retry/backoff, reorg handling, advisory-lock single writer, graceful shutdown.
+- WebSocket head trigger, retry/backoff, reorg handling, advisory-lock single writer, graceful shutdown, and the indexer health endpoints (`/healthz`, `/readyz`; see `docs/03` "Health").
 - ✅ Done when chaos tests pass (see `docs/06`): kill mid-batch, WebSocket drop, reorg on anvil, and two instances. Every one ends with zero gaps and zero duplicates.
 
 ### Phase 5 — API
 
-- `/v1/transfers`, `/v1/addresses/:address/transfers`, `/v1/stats`, health endpoints, cache-aside with Redis, problem+json errors.
+- `/v1/transfers`, `/v1/addresses/:address/transfers`, `/v1/stats`, health endpoints, cache-aside with Redis, problem+json errors, and request logging with `reqId` (the pino setup from Phase 3).
 - ✅ Done when e2e tests pass and cursor pagination is stable under concurrent inserts.
 
 ### Phase 6 — Observability in code
 
-- prom-client metrics (the exact names in `docs/09`) and pino structured logs.
-- ✅ Done when `/metrics` exposes every documented metric and logs are JSON with the required fields.
+- prom-client metrics (the exact names in `docs/09`). Structured logs are already in place from Phase 3.
+- ✅ Done when `/metrics` exposes every documented metric.
 
 ### Phase 7 — Containers
 
