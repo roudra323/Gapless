@@ -201,7 +201,7 @@ All config is validated at boot by Zod schemas in `packages/config`. An invalid 
 | `TOKEN_ADDRESS`       | all     | `0x…`                                                                 |
 | `RPC_HTTP_URL`        | indexer | secret (contains an API key)                                          |
 | `RPC_WS_URL`          | indexer | secret, optional (indexer works without it)                           |
-| `START_BLOCK`         | indexer | token deploy block                                                    |
+| `START_BLOCK`         | indexer | token deploy block (must be >= 1)                                     |
 | `CONFIRMATIONS`       | indexer | `5`                                                                   |
 | `BATCH_SIZE`          | indexer | `2000` (max blocks per `getLogs`)                                     |
 | `POLL_INTERVAL_MS`    | indexer | `4000`                                                                |
