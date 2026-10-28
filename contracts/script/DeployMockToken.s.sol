@@ -9,10 +9,11 @@ import {MockToken} from "../src/MockToken.sol";
 ///        --rpc-url http://localhost:8545 --broadcast --private-key <anvil account 0 key>
 ///      On a public chain, sign with a keystore (`--account <name>`), never a raw key.
 contract DeployMockToken is Script {
-    function run() external returns (MockToken token) {
-        // Read before deploying: the deploy transaction lands in this block or a later one, so this is a
-        // safe START_BLOCK for the indexer (never after the first Transfer event; see docs/03 "No gaps").
-        uint256 startBlock = block.number;
+    function run() external returns (MockToken token, uint256 startBlock) {
+        // block.number is the latest mined block; the deploy transaction lands in the next block or a later
+        // one. So block.number + 1 is a safe START_BLOCK (never after the first Transfer event; see docs/03
+        // "No gaps"), and it is always >= 1, as docs/03 "Startup" requires.
+        startBlock = block.number + 1;
 
         vm.startBroadcast();
         (, address deployer,) = vm.readCallers();

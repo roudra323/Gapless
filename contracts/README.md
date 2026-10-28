@@ -34,6 +34,6 @@ cast logs --rpc-url http://localhost:8545 --from-block 0 --address <address> \
   "Transfer(address indexed,address indexed,uint256)"
 ```
 
-- `START_BLOCK` is read before the deploy transaction, so it is at or before the deploy block. The indexer never starts after the first event.
+- `START_BLOCK` is the block after the latest block at deploy time. The deploy transaction lands in that block or a later one, so the indexer never starts after the first event, and the value is always at least 1 (see `docs/03` "Startup").
 - `--slow` puts each transfer in its own block. Without it, anvil packs many transfers into a few blocks.
 - Recipients are derived from a fixed seed: no keys exist for them, and every run uses the same addresses.
