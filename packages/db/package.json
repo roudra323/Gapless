@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@gapless/config": "workspace:*",
+    "@gapless/observability": "workspace:*",
     "drizzle-orm": "0.45.4",
     "pg": "8.23.1"
   },

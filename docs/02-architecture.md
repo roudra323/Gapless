@@ -193,6 +193,7 @@ All config is validated at boot by Zod schemas in `packages/config`. An invalid 
 | --------------------- | ------- | --------------------------------------------------------------------- |
 | `NODE_ENV`            | all     | `production`                                                          |
 | `LOG_LEVEL`           | all     | `info`                                                                |
+| `APP_VERSION`         | all     | Git SHA, set by Helm from the image tag; `dev` when unset             |
 | `DATABASE_URL`        | all     | `postgres://…` (secret)                                               |
 | `METRICS_PORT`        | all     | `9464`                                                                |
 | `PORT`                | api     | `3000`                                                                |
