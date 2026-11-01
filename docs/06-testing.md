@@ -25,7 +25,7 @@ Pure logic goes in pure functions so it's unit-testable without Nest, DB, or RPC
 
 ## Indexer integration and chaos tests (the important ones)
 
-Shared setup: start anvil in a container (Testcontainers, the same pinned image as `docker-compose.yml`), deploy `MockToken` with viem from the `forge build` artifact (`contracts/out/MockToken.sol/MockToken.json`), start Postgres in a container, run migrations, start the indexer in-process against them. The test sends its transfers with viem too, so it controls how they spread across blocks and can send more while the indexer runs.
+Shared setup: start anvil in a container (Testcontainers, the same pinned image as `docker-compose.yml`), deploy `MockToken` with viem from the `forge build` artifact (`contracts/out/MockToken.sol/MockToken.json`), start Postgres in a container, run migrations, start the indexer in-process against them. The test sends its transfers with viem too, so it controls how they spread across blocks and can send more while the indexer runs. The helpers live in `apps/indexer/test/integration/harness/`, and the parity check is `verifyRange` (`src/verify/verify-range.ts`). `contracts/out/` is git-ignored, so run `forge build` in `contracts/` before `pnpm test:integration` (CI does).
 
 Every test ends with the **parity assertion**: for the whole range, the set of `(tx_hash, log_index)` in the DB equals the set returned by `getLogs` from anvil. That means no gaps and no duplicates. Use the same logic as `verify.ts`.
 

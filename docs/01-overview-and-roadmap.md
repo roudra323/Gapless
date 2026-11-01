@@ -39,7 +39,7 @@ Every phase should move toward making this demo work.
 
 Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N passes.**
 
-**Current status:** **Phase 2 done (2026-10-28).** Next: Phase 3 (indexer core). Update this line when a phase passes.
+**Current status:** **Phase 3 done (2026-11-01).** Next: Phase 4 (indexer resilience). Update this line when a phase passes.
 
 ### Phase 0 — Repo foundation
 
