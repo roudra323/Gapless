@@ -57,4 +57,5 @@ Simulate a flaky RPC with a tiny in-test HTTP/WS proxy in front of anvil. Don't 
 - Tests are deterministic. No sleeps for synchronization: poll a condition with a timeout helper.
 - No shared state between tests. Each integration suite gets its own DB (a container or a fresh schema).
 - No real testnet or network calls in tests. Use anvil only.
+- Vitest caches transformed modules (`node_modules/.vitest-cache`), and a tsconfig change doesn't invalidate the cache. After changing a tsconfig (for example the decorator options), run `pnpm exec vitest --clearCache` before trusting the result.
 - Coverage isn't a target number, but every invariant in `docs/03` must have a test that would fail if it broke.

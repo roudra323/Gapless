@@ -65,7 +65,7 @@ gapless/
 ├── apps/
 │   ├── indexer/
 │   │   ├── src/
-│   │   │   ├── main.ts  app.module.ts  verify.ts   (P3)
+│   │   │   ├── main.ts  app.module.ts  lifecycle.service.ts  config.provider.ts  verify.ts   (P3)
 │   │   │   ├── ingestion/     # range planner, batch processor, reorg handler
 │   │   │   ├── head/          # head tracker (WS trigger + poll fallback)
 │   │   │   ├── leader/        # advisory-lock leadership

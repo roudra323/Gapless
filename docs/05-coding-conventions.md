@@ -91,7 +91,7 @@ These are rules. If one blocks you, raise it. Don't work around it.
 ## Dependencies
 
 - Check `docs/04` first. Use exact versions. Workspace packages use `workspace:*`.
-- Each package's `package.json` has an `exports` map, `"type": "module"`, and `engines.node`.
+- Every `package.json` has `"type": "module"` and `engines.node`. Packages in `packages/*` also have an `exports` map and build declarations. Apps have neither: nothing imports an app, and Node runs its `dist/main.js` directly.
 
 ## Git
 

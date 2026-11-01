@@ -1,0 +1,25 @@
+{
+  "name": "@gapless/indexer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^24.22.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node --env-file-if-exists=../../.env dist/main.js"
+  },
+  "dependencies": {
+    "@gapless/config": "workspace:*",
+    "@gapless/observability": "workspace:*",
+    "@nestjs/common": "12.3.2",
+    "@nestjs/core": "12.3.2",
+    "nestjs-pino": "5.3.1",
+    "pino": "10.4.0",
+    "pino-http": "11.0.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  }
+}

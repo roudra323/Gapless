@@ -71,6 +71,8 @@ Use a `$namespace` template variable, and use `$__rate_interval` in rate queries
 - On GKE, Cloud Logging ingests stdout automatically. Map pino levels to the GCP `severity` field (via a pino `formatters.level`) so severity filtering works.
 - The API adds a request-scoped `reqId`, honoring an incoming `x-request-id` header or generating one, and returns it in the response header.
 - Redact: `DATABASE_URL`, `RPC_*`, `authorization` headers.
+- NestJS apps log through nestjs-pino with the shared `loggerOptions` (`packages/observability`) and `wrapSerializers: false`. pino-http otherwise passes an already-serialized error to `errWithCause`, which then drops the inner errors of a cause. An app that logs requests must then set the `req`/`res` serializers itself.
+- NestJS apps boot with `abortOnError: false`, so a boot error reaches the entrypoint, which logs it as `fatal` JSON and exits 1 (Nest's default calls `process.abort()`, with no JSON log and exit code 134).
 - Optional later phase: Loki + Promtail/Alloy in kind for logs in Grafana.
 
 ## Tracing

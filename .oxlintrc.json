@@ -7,7 +7,9 @@
   "rules": {
     "no-console": "error",
     "typescript/no-explicit-any": "error",
-    "import/no-default-export": "error"
+    "import/no-default-export": "error",
+    // NestJS modules are decorated classes with only static members (`forRoot`).
+    "typescript/no-extraneous-class": ["warn", { "allowWithDecorator": true }]
   },
   "overrides": [
     {
