@@ -19,19 +19,20 @@ try {
 }
 ```
 
-| Export                    | Purpose                                                                                                     |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `normalizeAddress`        | Validates an address and returns it lowercase (storage, comparison).                                        |
-| `toChecksum`              | Validates an address and returns it EIP-55 checksummed (API responses).                                     |
-| `createRpcClient`         | viem public client over HTTP: no hidden retries, no block-number cache, batched POSTs, a request timeout.   |
-| `DEFAULT_RPC_TIMEOUT_MS`  | 10 000 ms, the per-request timeout.                                                                         |
-| `RPC_BATCH_SIZE`          | 50, the most JSON-RPC calls in one POST.                                                                    |
-| `classifyRpcError`        | `range-rejected` (the provider refused the range size: halve the batch) or `transient` (retry later).       |
-| `redactRpcUrl`            | Copies an error with the URL's path, query and userinfo removed from every message, stack, field and cause. |
-| `transferEventAbi`        | The ERC-20 `Transfer` event ABI (`as const`).                                                               |
-| `TRANSFER_TOPIC`          | The `Transfer(address,address,uint256)` selector, the first topic of every Transfer log.                    |
-| `decodeTransferLog`       | Decodes one raw log to `{ from, to, value }` (lowercase addresses, `bigint` value), or throws.              |
-| `InvalidTransferLogError` | Thrown for a log that isn't a standard ERC-20 Transfer. Not retryable.                                      |
+| Export                    | Purpose                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `normalizeAddress`        | Validates an address and returns it lowercase (storage, comparison).                                                     |
+| `toChecksum`              | Validates an address and returns it EIP-55 checksummed (API responses).                                                  |
+| `createRpcClient`         | viem public client over HTTP: no hidden retries, no block-number cache, batched POSTs, a request timeout.                |
+| `DEFAULT_RPC_TIMEOUT_MS`  | 10 000 ms, the per-request timeout.                                                                                      |
+| `RPC_BATCH_SIZE`          | 50, the most JSON-RPC calls in one POST.                                                                                 |
+| `classifyRpcError`        | `range-rejected` (the provider refused the range size: halve the batch) or `transient` (retry later).                    |
+| `subscribeNewHeads`       | `newHeads` over a WebSocket, as a doorbell only. viem's reconnect is off: the caller re-subscribes with its own backoff. |
+| `redactRpcUrl`            | Copies an error with the URL's path, query and userinfo removed from every message, stack, field and cause.              |
+| `transferEventAbi`        | The ERC-20 `Transfer` event ABI (`as const`).                                                                            |
+| `TRANSFER_TOPIC`          | The `Transfer(address,address,uint256)` selector, the first topic of every Transfer log.                                 |
+| `decodeTransferLog`       | Decodes one raw log to `{ from, to, value }` (lowercase addresses, `bigint` value), or throws.                           |
+| `InvalidTransferLogError` | Thrown for a log that isn't a standard ERC-20 Transfer. Not retryable.                                                   |
 
 ## Rules
 

@@ -13,7 +13,7 @@ function hash(n: number, fork = 0): Hex {
  */
 function setup(storedBlocks: readonly number[], forkedAbove: number) {
   const asked: bigint[] = [];
-  const sorted = [...storedBlocks].sort((a, b) => b - a);
+  const sorted = storedBlocks.toSorted((a, b) => b - a);
   const newestStoredAtOrBelow = (block: bigint): Promise<StoredBlock | null> => {
     const found = sorted.find((b) => BigInt(b) <= block);
     return Promise.resolve(

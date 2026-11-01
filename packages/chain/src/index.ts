@@ -6,6 +6,7 @@ export {
   type RpcClientOptions,
 } from './rpc-client.js';
 export { classifyRpcError, redactRpcUrl, type RpcErrorClass } from './rpc-error.js';
+export { type NewHeadsOptions, type NewHeadsSubscription, subscribeNewHeads } from './ws-client.js';
 export {
   decodeTransferLog,
   type DecodedTransfer,

@@ -184,20 +184,20 @@ describe('IndexerRepository', () => {
   });
 });
 
+const other = () => new IndexerRepository(pg.handle.db, CHAIN_ID, OTHER_TOKEN);
+
+async function indexed(blocks: readonly bigint[], to: bigint): Promise<void> {
+  await repo.seedCheckpoint(SEED);
+  await repo.commitBatch({
+    rows: blocks.map((block) => row(block, 0)),
+    from: 10n,
+    to,
+    toHash: hash(Number(to)),
+    headBlock: to,
+  });
+}
+
 describe('IndexerRepository reorg support', () => {
-  const other = () => new IndexerRepository(pg.handle.db, CHAIN_ID, OTHER_TOKEN);
-
-  async function indexed(blocks: readonly bigint[], to: bigint): Promise<void> {
-    await repo.seedCheckpoint(SEED);
-    await repo.commitBatch({
-      rows: blocks.map((block) => row(block, 0)),
-      from: 10n,
-      to,
-      toHash: hash(Number(to)),
-      headBlock: to,
-    });
-  }
-
   it('finds the newest stored block at or below a block', async () => {
     await indexed([10n, 12n, 15n], 20n);
     expect(await repo.newestTransferBlockAtOrBelow(14n)).toEqual({
