@@ -5,7 +5,7 @@ export {
   RPC_BATCH_SIZE,
   type RpcClientOptions,
 } from './rpc-client.js';
-export { redactRpcUrl } from './rpc-error.js';
+export { classifyRpcError, redactRpcUrl, type RpcErrorClass } from './rpc-error.js';
 export {
   decodeTransferLog,
   type DecodedTransfer,

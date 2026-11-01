@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { redactRpcUrl } from './rpc-error.js';
+import { classifyRpcError, redactRpcUrl } from './rpc-error.js';
 
 const URL_WITH_KEY = 'https://eth.provider.example/v2/key-hunter2';
 
@@ -93,5 +93,28 @@ describe('redactRpcUrl', () => {
   it('passes non-error values through', () => {
     expect(redactRpcUrl(42, URL_WITH_KEY)).toBe(42);
     expect(redactRpcUrl(undefined, URL_WITH_KEY)).toBeUndefined();
+  });
+});
+
+describe('classifyRpcError', () => {
+  it('finds a range message deep in the cause chain', () => {
+    const inner = Object.assign(new Error('RPC Request failed.'), {
+      details: 'query returned more than 10000 results',
+    });
+    const outer = new Error('request failed', { cause: new Error('wrapped', { cause: inner }) });
+    expect(classifyRpcError(outer)).toBe('range-rejected');
+  });
+
+  it('treats unknown values and plain errors as transient', () => {
+    expect(classifyRpcError(new Error('socket hang up'))).toBe('transient');
+    expect(classifyRpcError('boom')).toBe('transient');
+    expect(classifyRpcError(undefined)).toBe('transient');
+  });
+
+  it('stops on a cause cycle', () => {
+    const a = new Error('a');
+    const b = new Error('b', { cause: a });
+    a.cause = b;
+    expect(classifyRpcError(a)).toBe('transient');
   });
 });

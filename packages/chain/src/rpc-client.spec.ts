@@ -5,7 +5,7 @@ import { HttpRequestError, TimeoutError } from 'viem';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createRpcClient } from './rpc-client.js';
-import { redactRpcUrl } from './rpc-error.js';
+import { classifyRpcError, redactRpcUrl } from './rpc-error.js';
 
 type JsonRpcRequest = { id: number; method: string; params?: unknown[] };
 type Handler = (body: JsonRpcRequest | JsonRpcRequest[], res: ServerResponse) => void;
@@ -168,5 +168,83 @@ describe('redactRpcUrl with real viem errors', () => {
     const err = await errorFrom(url);
     expect(allText(err)).toContain('hunter2');
     expect(allText(redactRpcUrl(err, url))).not.toContain('hunter2');
+  });
+});
+
+/** Answers every call with a JSON-RPC error object. */
+function respondWithError(code: number, message: string): Handler {
+  const answer = (call: JsonRpcRequest) => ({
+    jsonrpc: '2.0',
+    id: call.id,
+    error: { code, message },
+  });
+  return (body, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(Array.isArray(body) ? body.map(answer) : answer(body)));
+  };
+}
+
+/** The error from one raw `eth_getLogs` call that must fail, as the batch fetch makes it. */
+async function getLogsError(url: string, timeoutMs?: number): Promise<unknown> {
+  const client = createRpcClient({ url, timeoutMs });
+  try {
+    await client.request({ method: 'eth_getLogs', params: [{ fromBlock: '0x1', toBlock: '0x2' }] });
+  } catch (err) {
+    return err;
+  }
+  throw new Error('expected the call to fail');
+}
+
+describe('classifyRpcError with real viem errors', () => {
+  it.each([
+    [-32005, 'query returned more than 10000 results'],
+    [
+      -32602,
+      'Log response size exceeded. You can make eth_getLogs requests with up to a 2K block range',
+    ],
+    [-32000, 'block range is too wide'],
+    [-32000, 'eth_getLogs is limited to a 10,000 range'],
+    [-32005, 'limit exceeded'],
+  ])('rejects the range for JSON-RPC error %i "%s"', async (code, message) => {
+    const { origin } = await startServer(respondWithError(code, message));
+    expect(classifyRpcError(await getLogsError(origin))).toBe('range-rejected');
+  });
+
+  it.each([
+    [-32005, 'daily request count exceeded, request rate limited'],
+    [-32000, 'header not found'],
+    [-32603, 'internal error'],
+  ])('keeps the range for JSON-RPC error %i "%s"', async (code, message) => {
+    const { origin } = await startServer(respondWithError(code, message));
+    expect(classifyRpcError(await getLogsError(origin))).toBe('transient');
+  });
+
+  it('rejects the range on a timeout', async () => {
+    const { origin } = await startServer(() => {
+      // Never respond.
+    });
+    expect(classifyRpcError(await getLogsError(origin, 50))).toBe('range-rejected');
+  });
+
+  it('rejects the range on HTTP 413', async () => {
+    const { origin } = await startServer((_body, res) => {
+      res.statusCode = 413;
+      res.end('payload too large');
+    });
+    expect(classifyRpcError(await getLogsError(origin))).toBe('range-rejected');
+  });
+
+  it.each([429, 500, 503])('keeps the range on HTTP %i', async (status) => {
+    const { origin } = await startServer((_body, res) => {
+      res.statusCode = status;
+      res.end('busy');
+    });
+    expect(classifyRpcError(await getLogsError(origin))).toBe('transient');
+  });
+
+  it('keeps the range on a refused connection', async () => {
+    const { origin } = await startServer(respondWith(() => '0x1'));
+    for (const server of servers.splice(0)) await new Promise((resolve) => server.close(resolve));
+    expect(classifyRpcError(await getLogsError(origin))).toBe('transient');
   });
 });

@@ -196,9 +196,15 @@ importers:
 
   apps/indexer:
     dependencies:
+      '@gapless/chain':
+        specifier: workspace:*
+        version: link:../../packages/chain
       '@gapless/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@gapless/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@gapless/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -223,6 +229,9 @@ importers:
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
+      viem:
+        specifier: 2.57.13
+        version: 2.57.13(typescript@6.0.3)(zod@4.6.7)
 
   packages/chain:
     dependencies:

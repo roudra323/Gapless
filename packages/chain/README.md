@@ -26,6 +26,7 @@ try {
 | `createRpcClient`         | viem public client over HTTP: no hidden retries, no block-number cache, batched POSTs, a request timeout.   |
 | `DEFAULT_RPC_TIMEOUT_MS`  | 10 000 ms, the per-request timeout.                                                                         |
 | `RPC_BATCH_SIZE`          | 50, the most JSON-RPC calls in one POST.                                                                    |
+| `classifyRpcError`        | `range-rejected` (the provider refused the range size: halve the batch) or `transient` (retry later).       |
 | `redactRpcUrl`            | Copies an error with the URL's path, query and userinfo removed from every message, stack, field and cause. |
 | `transferEventAbi`        | The ERC-20 `Transfer` event ABI (`as const`).                                                               |
 | `TRANSFER_TOPIC`          | The `Transfer(address,address,uint256)` selector, the first topic of every Transfer log.                    |
@@ -37,4 +38,5 @@ try {
 - **Validation is strict.** A mixed-case address with a wrong checksum is rejected by both helpers. viem's `getAddress` alone accepts it and returns a corrected checksum, which hides a typo.
 - **Never let viem decode logs inside `getLogs`.** With `strict: false` (viem's default), it returns logs with partial or empty `args`; with `strict: true`, it drops logs it can't decode. Both lose data. Fetch raw logs and call `decodeTransferLog` on each one. It checks the exact shape (3 topics, zero-padded address topics, one 32-byte data word), because viem's decoder ignores extra topics and data, and an ERC-721 `Transfer` has the same first topic.
 - **The client never retries.** viem retries 3 times by default. The indexer owns retries (docs/03 "Retry policy"), so the client sets `retryCount: 0`.
+- **Classify, then redact.** `classifyRpcError` reads viem's error classes and fields (`TimeoutError`, `status`, `code`) through the `cause` chain. The copy from `redactRpcUrl` is a plain `Error`, so classify the original.
 - **Redact before logging.** viem puts the request URL in its error messages and strips only `user:pass@`, so a key in the path (`/v2/<key>`) reaches the logs. The logger's `redact` option matches field names, not text inside a message.

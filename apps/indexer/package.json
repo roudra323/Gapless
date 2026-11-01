@@ -12,7 +12,9 @@
     "start": "node --env-file-if-exists=../../.env dist/main.js"
   },
   "dependencies": {
+    "@gapless/chain": "workspace:*",
     "@gapless/config": "workspace:*",
+    "@gapless/db": "workspace:*",
     "@gapless/observability": "workspace:*",
     "@nestjs/common": "12.3.2",
     "@nestjs/core": "12.3.2",
@@ -20,6 +22,7 @@
     "pino": "10.4.0",
     "pino-http": "11.0.0",
     "reflect-metadata": "0.2.2",
-    "rxjs": "7.8.2"
+    "rxjs": "7.8.2",
+    "viem": "2.57.13"
   }
 }

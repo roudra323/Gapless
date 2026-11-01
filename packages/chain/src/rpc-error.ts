@@ -111,6 +111,68 @@ function redactValue(
   return value;
 }
 
+/** How the indexer must react to a failed RPC call (docs/03 "Retry policy"). */
+export type RpcErrorClass =
+  /** The provider refused the size of the range: halve the batch and retry the same range. */
+  | 'range-rejected'
+  /** Anything else (network, 429, 5xx, other RPC errors): retry the same range later. */
+  | 'transient';
+
+/** JSON-RPC "limit exceeded" (EIP-1474). Infura also uses it for rate limits, see below. */
+const LIMIT_EXCEEDED_CODE = -32005;
+const PAYLOAD_TOO_LARGE_STATUS = 413;
+
+/**
+ * Provider messages for a `getLogs` range that is too large. Each provider words it differently:
+ * "query returned more than 10000 results" (geth, Infura), "Log response size exceeded" (Alchemy),
+ * "block range is too wide" (Ankr), "eth_getLogs is limited to a 10,000 range" (QuickNode).
+ */
+const RANGE_REJECTED_TEXT =
+  /more than [\d,]+ results|too many (results|logs)|response size|block range|range (is )?too (large|wide|big)|exceeds? (the )?max(imum)? (block )?range|limited to an? [\d,]+|query timeout/i;
+
+/** A -32005 that is a rate limit, not a range limit. A smaller range would not help. */
+const RATE_LIMIT_TEXT = /rate|request count|too many requests/i;
+
+type ErrorFields = {
+  readonly message?: unknown;
+  readonly details?: unknown;
+  readonly code?: unknown;
+  readonly status?: unknown;
+};
+
+/** `err` and its `cause` chain: viem wraps the HTTP or RPC error in one or more action errors. */
+function causeChain(err: unknown): readonly object[] {
+  const chain: object[] = [];
+  let current: unknown = err;
+  while (typeof current === 'object' && current !== null && chain.length <= MAX_DEPTH) {
+    if (chain.includes(current)) break;
+    chain.push(current);
+    current = (current as { cause?: unknown }).cause;
+  }
+  return chain;
+}
+
+/**
+ * Classifies a failed RPC call. Only a range the provider refused because of its size is
+ * `range-rejected`: a viem `TimeoutError`, an HTTP 413, a JSON-RPC -32005 (except a rate limit), or a
+ * known "range too large" message anywhere in the `cause` chain. Every other error is `transient`,
+ * never skipped. Non-RPC failures (an invalid log, a broken invariant) are the caller's own errors
+ * and must be checked before this.
+ *
+ * Call it on the original error, not on the copy from `redactRpcUrl`.
+ */
+export function classifyRpcError(err: unknown): RpcErrorClass {
+  for (const link of causeChain(err)) {
+    if (link instanceof Error && link.name === 'TimeoutError') return 'range-rejected';
+    const { message, details, code, status } = link as ErrorFields;
+    if (status === PAYLOAD_TOO_LARGE_STATUS) return 'range-rejected';
+    const text = [message, details].filter((part) => typeof part === 'string').join('\n');
+    if (code === LIMIT_EXCEEDED_CODE && !RATE_LIMIT_TEXT.test(text)) return 'range-rejected';
+    if (RANGE_REJECTED_TEXT.test(text)) return 'range-rejected';
+  }
+  return 'transient';
+}
+
 /**
  * Returns a copy of `err` with the secret parts of the RPC URL removed from every message, stack,
  * field and cause. viem puts the URL in its error messages and only strips `user:pass@` from it,
