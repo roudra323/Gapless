@@ -85,6 +85,9 @@ beforeAll(async () => {
     // Small, so the run takes many batches and crosses many range boundaries.
     BATCH_SIZE: 5n,
     POLL_INTERVAL_MS: 100,
+    REORG_REWIND_BLOCKS: 64n,
+    SHUTDOWN_TIMEOUT_MS: 20_000,
+    METRICS_PORT: 0,
   };
   repository = new IndexerRepository(pg.handle.db, config.CHAIN_ID, config.TOKEN_ADDRESS);
 });

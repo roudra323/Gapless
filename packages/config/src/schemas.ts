@@ -86,10 +86,22 @@ export const chainConfigSchema = z.object({
 
 export type ChainConfig = z.infer<typeof chainConfigSchema>;
 
+/** A TCP port. 0 asks the OS for a free port (used by tests). */
+const port = intAtLeast(0).refine((value) => value <= 65_535, {
+  error: 'must be a port number (0-65535)',
+});
+
 /**
- * Env for the indexer in Phase 3 (HTTP polling only). Phase 4 adds `RPC_WS_URL`,
- * `REORG_REWIND_BLOCKS`, and `SHUTDOWN_TIMEOUT_MS`.
+ * An optional `ws://` or `wss://` URL. An empty value means unset, because `.env.example` has
+ * `RPC_WS_URL=` (poll-only mode, docs/03 "HeadTracker").
  */
+const optionalWsUrl = z
+  .string()
+  .optional()
+  .transform((value) => (value === '' ? undefined : value))
+  .pipe(z.url({ protocol: /^wss?$/, error: 'must be a ws:// or wss:// URL' }).optional());
+
+/** Env for the indexer (docs/02 "Configuration"). */
 export const indexerConfigSchema = migrateConfigSchema.extend(chainConfigSchema.shape).extend({
   /** Secret: may contain a provider API key. The logger redacts it (packages/observability). */
   RPC_HTTP_URL: z.url({
@@ -102,6 +114,14 @@ export const indexerConfigSchema = migrateConfigSchema.extend(chainConfigSchema.
   CONFIRMATIONS: bigintAtLeast(0n).default(5n),
   BATCH_SIZE: bigintAtLeast(1n).default(2000n),
   POLL_INTERVAL_MS: intAtLeast(100).default(4000),
+  /** Secret, optional: a WebSocket URL that only wakes the loop sooner (docs/03 "HeadTracker"). */
+  RPC_WS_URL: optionalWsUrl,
+  /** The minimum rewind depth on a reorg (docs/03 "Reorg guard"). */
+  REORG_REWIND_BLOCKS: bigintAtLeast(1n).default(64n),
+  /** Must be less than the pod's `terminationGracePeriodSeconds` (docs/03 "Graceful shutdown"). */
+  SHUTDOWN_TIMEOUT_MS: intAtLeast(100).default(20_000),
+  /** The internal port for `/healthz` and `/readyz` (and `/metrics` from Phase 6). */
+  METRICS_PORT: port.default(9464),
 });
 
 export type IndexerConfig = z.infer<typeof indexerConfigSchema>;

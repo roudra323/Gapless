@@ -19,6 +19,9 @@ const TEST_CONFIG: IndexerConfig = {
   CONFIRMATIONS: 5n,
   BATCH_SIZE: 2000n,
   POLL_INTERVAL_MS: 4000,
+  REORG_REWIND_BLOCKS: 64n,
+  SHUTDOWN_TIMEOUT_MS: 20_000,
+  METRICS_PORT: 0,
 };
 
 type LogLine = Record<string, unknown>;

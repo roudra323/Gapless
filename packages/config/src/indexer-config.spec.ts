@@ -36,6 +36,9 @@ describe('indexerConfigSchema', () => {
       CONFIRMATIONS: 5n,
       BATCH_SIZE: 2000n,
       POLL_INTERVAL_MS: 4000,
+      REORG_REWIND_BLOCKS: 64n,
+      SHUTDOWN_TIMEOUT_MS: 20_000,
+      METRICS_PORT: 9464,
     });
   });
 
@@ -113,6 +116,9 @@ describe('indexerConfigSchema', () => {
       ['CHAIN_ID', '0', 'must be a whole number of at least 1'],
       ['CHAIN_ID', '9007199254740993', 'must be a whole number of at least 1'],
       ['POLL_INTERVAL_MS', '50', 'must be a whole number of at least 100'],
+      ['REORG_REWIND_BLOCKS', '0', 'must be at least 1'],
+      ['SHUTDOWN_TIMEOUT_MS', '50', 'must be a whole number of at least 100'],
+      ['METRICS_PORT', '65536', 'must be a port number (0-65535)'],
     ])('rejects %s=%s', (key, value, message) => {
       expect(issuesFor({ ...VALID_ENV, [key]: value })).toEqual([{ key, message }]);
     });
@@ -129,5 +135,32 @@ describe('indexerConfigSchema', () => {
       const issues = issuesFor({ ...VALID_ENV, RPC_HTTP_URL: 'ftp://rpc.example/v2/key-hunter2' });
       expect(JSON.stringify(issues)).not.toContain('hunter2');
     });
+  });
+
+  describe('RPC_WS_URL', () => {
+    it('is unset when missing or empty (poll-only mode)', () => {
+      expect(loadConfig(indexerConfigSchema, VALID_ENV).RPC_WS_URL).toBeUndefined();
+      expect(
+        loadConfig(indexerConfigSchema, { ...VALID_ENV, RPC_WS_URL: '' }).RPC_WS_URL,
+      ).toBeUndefined();
+    });
+
+    it.each(['ws://localhost:8545', 'wss://rpc.example/ws/key'])('accepts %s', (url) => {
+      expect(loadConfig(indexerConfigSchema, { ...VALID_ENV, RPC_WS_URL: url }).RPC_WS_URL).toBe(
+        url,
+      );
+    });
+
+    it('rejects an http URL without showing it', () => {
+      const issues = issuesFor({ ...VALID_ENV, RPC_WS_URL: 'https://rpc.example/v2/key-hunter2' });
+      expect(issues).toEqual([{ key: 'RPC_WS_URL', message: 'must be a ws:// or wss:// URL' }]);
+      expect(JSON.stringify(issues)).not.toContain('hunter2');
+    });
+  });
+
+  it('accepts METRICS_PORT=0 (a free port, for tests)', () => {
+    expect(loadConfig(indexerConfigSchema, { ...VALID_ENV, METRICS_PORT: '0' }).METRICS_PORT).toBe(
+      0,
+    );
   });
 });
