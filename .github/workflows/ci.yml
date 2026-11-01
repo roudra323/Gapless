@@ -61,7 +61,13 @@ jobs:
         with:
           node-version-file: .nvmrc
       - run: pnpm install --frozen-lockfile
-      # Testcontainers uses the runner's Docker daemon. Foundry (anvil) is added in Phase 3.
+      # The indexer tests deploy MockToken from its forge build artifact (docs/06).
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: v1.8.6
+      - run: forge soldeer install && forge build
+        working-directory: contracts
+      # Testcontainers uses the runner's Docker daemon for Postgres and anvil.
       - run: pnpm test:integration
 
   contracts:
