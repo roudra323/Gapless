@@ -95,7 +95,8 @@ The checkpoint update only matches the row if `last_block` still equals `from - 
 ### Retry policy
 
 - Exponential backoff with full jitter: base 500ms, max 30s, retried indefinitely for transient errors (network, 429, 5xx, timeouts).
-- Every RPC call has a timeout. A request that never returns would stop the loop and the liveness heartbeat (see "Health").
+- Every RPC call has a timeout (10s, `DEFAULT_RPC_TIMEOUT_MS` in `packages/chain`). A request that never returns would stop the loop and the liveness heartbeat (see "Health").
+- This policy is the only retry layer. The HTTP client does no retries of its own (viem's default is 3), so every attempt gets the backoff, the heartbeat, and the batch-size halving.
 - Non-retryable errors (an invalid config, such as a wrong contract address with no code) → log `fatal` and exit non-zero, so Kubernetes restarts the pod and the alert shows the problem.
 - Every RPC call records `gapless_rpc_requests_total{method,transport,result}` (`result` = `ok`|`error`|`rate_limited`) and `gapless_rpc_request_duration_seconds{method,transport}`. The metric contract is `docs/09`.
 

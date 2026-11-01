@@ -12,7 +12,7 @@ export type LoggerConfig = {
 };
 
 /** Pino level → Cloud Logging `severity`, so GCP can filter by severity (see docs/09 "Logs"). */
-const GCP_SEVERITY: Record<Level, string> = {
+const GCP_SEVERITY: Readonly<Record<Level, string>> = {
   trace: 'DEBUG',
   debug: 'DEBUG',
   info: 'INFO',

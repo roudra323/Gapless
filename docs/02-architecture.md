@@ -36,17 +36,17 @@ flowchart LR
 
 ## Components
 
-| Component                | Responsibility                                                           | Scaling                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `apps/indexer`           | Ingest `Transfer` logs into Postgres. The **only** writer of chain data. | Exactly 1 active instance. Enforced by `replicas: 1`, `strategy: Recreate`, and a Postgres advisory lock. |
-| `apps/api`               | Read-only HTTP API with a Redis cache.                                   | Stateless. HPA from 2 to 5 replicas on CPU.                                                               |
-| `packages/db`            | Drizzle schema, migrations, client factory, migrate entrypoint.          | —                                                                                                         |
-| `packages/chain`         | viem clients, the ABI, chain config, and address helpers.                | —                                                                                                         |
-| `packages/config`        | Zod env schemas and the `loadConfig()` helper.                           | —                                                                                                         |
-| `packages/observability` | Metric registry helpers and the pino logger config.                      | —                                                                                                         |
-| `contracts/`             | Foundry: `MockToken`, the deploy script, the transfer-spam script.       | —                                                                                                         |
-| `deploy/`                | Helm chart, kind config, monitoring values, dashboards, alert rules.     | —                                                                                                         |
-| `infra/terraform/`       | GCP infrastructure.                                                      | —                                                                                                         |
+| Component                | Responsibility                                                                         | Scaling                                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `apps/indexer`           | Ingest `Transfer` logs into Postgres. The **only** writer of chain data.               | Exactly 1 active instance. Enforced by `replicas: 1`, `strategy: Recreate`, and a Postgres advisory lock. |
+| `apps/api`               | Read-only HTTP API with a Redis cache.                                                 | Stateless. HPA from 2 to 5 replicas on CPU.                                                               |
+| `packages/db`            | Drizzle schema, migrations, client factory, migrate entrypoint.                        | —                                                                                                         |
+| `packages/chain`         | viem client, the `Transfer` ABI and decoder, RPC error redaction, and address helpers. | —                                                                                                         |
+| `packages/config`        | Zod env schemas and the `loadConfig()` helper.                                         | —                                                                                                         |
+| `packages/observability` | Metric registry helpers and the pino logger config.                                    | —                                                                                                         |
+| `contracts/`             | Foundry: `MockToken`, the deploy script, the transfer-spam script.                     | —                                                                                                         |
+| `deploy/`                | Helm chart, kind config, monitoring values, dashboards, alert rules.                   | —                                                                                                         |
+| `infra/terraform/`       | GCP infrastructure.                                                                    | —                                                                                                         |
 
 **Rule:** apps depend on packages. Packages never depend on apps, and `packages/*` must not import NestJS (keep them framework-free so they're easy to test).
 

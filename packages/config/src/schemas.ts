@@ -1,3 +1,4 @@
+import { normalizeAddress } from '@gapless/chain';
 import { isAddress, zeroAddress } from 'viem';
 import { z } from 'zod';
 
@@ -66,7 +67,7 @@ const address = z
   .refine((value) => isAddress(value), {
     error: 'must be a 0x address (lowercase or EIP-55 checksummed)',
   })
-  .transform((value) => value.toLowerCase() as `0x${string}`);
+  .transform((value) => normalizeAddress(value));
 
 /**
  * A contract address. The zero address (the `.env.example` placeholder) can never hold code, and

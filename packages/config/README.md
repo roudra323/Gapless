@@ -20,7 +20,7 @@ const config = loadConfig(dbConfigSchema); // reads process.env; throws ConfigEr
 | `dbConfigSchema`      | `DATABASE_URL` (a `postgres://` or `postgresql://` URL). Apps extend it in later phases.                                               |
 | `loggingConfigSchema` | `LOG_LEVEL` (pino level, default `info`) and `APP_VERSION` (Git SHA, default `dev`).                                                   |
 | `migrateConfigSchema` | `dbConfigSchema` + `loggingConfigSchema`. Used by `pnpm db:migrate`.                                                                   |
-| `chainConfigSchema`   | `CHAIN_ID` and `TOKEN_ADDRESS` (returned lowercase). Shared by the indexer and the API.                                                |
+| `chainConfigSchema`   | `CHAIN_ID` and `TOKEN_ADDRESS` (returned lowercase by `normalizeAddress` from `@gapless/chain`). Shared by the indexer and the API.    |
 | `indexerConfigSchema` | `migrateConfigSchema` + `chainConfigSchema` + `RPC_HTTP_URL`, `START_BLOCK` (>= 1), `CONFIRMATIONS`, `BATCH_SIZE`, `POLL_INTERVAL_MS`. |
 
 The entrypoint that calls `loadConfig` catches `ConfigError`, logs the invalid keys, and exits 1 (see `docs/05`).

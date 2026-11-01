@@ -27,17 +27,18 @@ These are rules. If one blocks you, raise it. Don't work around it.
 
 ## Naming
 
-| Thing                 | Style                          | Example                                                                |
-| --------------------- | ------------------------------ | ---------------------------------------------------------------------- |
-| Files                 | kebab-case + role suffix       | `transfers.controller.ts`, `range-planner.ts`, `range-planner.spec.ts` |
-| Classes, types        | PascalCase                     | `TransferRepository`, `TransferRow`                                    |
-| Functions, variables  | camelCase                      | `planNextRange`                                                        |
-| Constants             | UPPER_SNAKE                    | `MAX_PAGE_SIZE`                                                        |
-| Env vars              | UPPER_SNAKE                    | `RPC_HTTP_URL`                                                         |
-| DB tables and columns | snake_case, plural tables      | `transfers.block_number`                                               |
-| Metrics               | `gapless_<area>_<name>_<unit>` | `gapless_indexer_batch_duration_seconds`                               |
-| Error codes           | UPPER_SNAKE                    | `INVALID_CURSOR`                                                       |
-| Workspace packages    | `@gapless/<name>`              | `@gapless/db`                                                          |
+| Thing                                    | Style                          | Example                                                                |
+| ---------------------------------------- | ------------------------------ | ---------------------------------------------------------------------- |
+| Files                                    | kebab-case + role suffix       | `transfers.controller.ts`, `range-planner.ts`, `range-planner.spec.ts` |
+| Classes, types                           | PascalCase                     | `TransferRepository`, `TransferRow`                                    |
+| Functions, variables                     | camelCase                      | `planNextRange`                                                        |
+| Constants (simple values, lookup tables) | UPPER_SNAKE                    | `MAX_PAGE_SIZE`, `GCP_SEVERITY`                                        |
+| Schemas and ABIs                         | camelCase + role suffix        | `indexerConfigSchema`, `transferEventAbi`                              |
+| Env vars                                 | UPPER_SNAKE                    | `RPC_HTTP_URL`                                                         |
+| DB tables and columns                    | snake_case, plural tables      | `transfers.block_number`                                               |
+| Metrics                                  | `gapless_<area>_<name>_<unit>` | `gapless_indexer_batch_duration_seconds`                               |
+| Error codes                              | UPPER_SNAKE                    | `INVALID_CURSOR`                                                       |
+| Workspace packages                       | `@gapless/<name>`              | `@gapless/db`                                                          |
 
 ## NestJS structure
 
@@ -54,6 +55,8 @@ These are rules. If one blocks you, raise it. Don't work around it.
 ## Errors
 
 - Domain errors extend one base: `class DomainError extends Error { constructor(readonly code: ErrorCode, message: string, readonly cause?: unknown) }`.
+  - Domain errors are the errors the API maps to problem+json. `DomainError` arrives with the API in Phase 5.
+  - Technical errors inside `packages/*` (invalid config, invalid chain data) extend `Error` directly and say in their TSDoc whether they are retryable: `ConfigError`, `InvalidTransferLogError`.
 - The global exception filter maps domain errors to RFC 9457 problem+json with an `errorCode`. Unknown errors become 500 with a generic body. Log the full error server-side and never leak stack traces or SQL.
 - Never swallow errors. A `catch` must either handle the error meaningfully (retry, fallback, translate) or rethrow with `cause`.
 - Redis failures in the API are **non-fatal**: log a `warn`, increment the cache-error metric, and fall through to the DB.
