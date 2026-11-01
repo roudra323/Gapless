@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "node --env-file-if-exists=../../.env dist/main.js"
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "verify": "node --env-file-if-exists=../../.env dist/verify.js"
   },
   "dependencies": {
     "@gapless/chain": "workspace:*",

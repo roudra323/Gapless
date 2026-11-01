@@ -1,5 +1,5 @@
 import { type Database, indexerCheckpoints, type NewTransferRow, transfers } from '@gapless/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, between, eq, sql } from 'drizzle-orm';
 import type { Address, Hex } from 'viem';
 
 import { CheckpointFenceError } from './ingestion-errors.js';
@@ -21,6 +21,12 @@ export type CommitBatchInput = {
   /** The chain's hash of `to`, the new `last_block_hash`. */
   readonly toHash: Hex;
   readonly headBlock: bigint;
+};
+
+/** The identity of one stored Transfer log: the primary key without the chain. */
+export type TransferKey = {
+  readonly txHash: string;
+  readonly logIndex: number;
 };
 
 export type CommitBatchResult = {
@@ -85,6 +91,20 @@ export class IndexerRepository {
       .from(indexerCheckpoints)
       .where(this.matchesThisToken());
     return row === undefined ? null : toCheckpoint(row);
+  }
+
+  /** The keys of the stored transfers in `from`–`to` (inclusive), for the parity check. */
+  async transferKeys(from: bigint, to: bigint): Promise<TransferKey[]> {
+    return this.db
+      .select({ txHash: transfers.txHash, logIndex: transfers.logIndex })
+      .from(transfers)
+      .where(
+        and(
+          eq(transfers.chainId, this.chainId),
+          eq(transfers.tokenAddress, this.tokenAddress),
+          between(transfers.blockNumber, from, to),
+        ),
+      );
   }
 
   /**
