@@ -14,6 +14,7 @@
     "typecheck": "tsc -p tsconfig.json && pnpm -r --if-present typecheck",
     "test": "vitest run",
     "test:integration": "vitest run -c vitest.integration.config.ts",
+    "test:chaos": "pnpm --filter @gapless/indexer... build && vitest run -c vitest.chaos.config.ts",
     "dev:deps": "docker compose up -d --wait",
     "db:generate": "pnpm --filter @gapless/db db:generate",
     "db:migrate": "pnpm --filter @gapless/db... build && pnpm --filter @gapless/db db:migrate",

@@ -67,6 +67,10 @@ export type TestToken = {
   readonly sendTransfers: (count: number, options: SendTransfersOptions) => Promise<bigint>;
   /** Mines `blocks` empty blocks (to pass the confirmations). */
   readonly mine: (blocks: number) => Promise<bigint>;
+  /** `evm_snapshot`: saves the chain state. Returns the id for `revert`. */
+  readonly snapshot: () => Promise<Hex>;
+  /** `evm_revert`: drops every block after the snapshot (a reorg, once new blocks are mined). */
+  readonly revert: (id: Hex) => Promise<void>;
 };
 
 /**
@@ -147,5 +151,8 @@ export async function deployMockToken(rpcUrl: string): Promise<TestToken> {
     return publicClient.getBlockNumber();
   };
 
-  return { address, startBlock, publicClient, sendTransfers, mine };
+  const snapshot = () => testClient.snapshot();
+  const revert = (id: Hex) => testClient.revert({ id });
+
+  return { address, startBlock, publicClient, sendTransfers, mine, snapshot, revert };
 }
