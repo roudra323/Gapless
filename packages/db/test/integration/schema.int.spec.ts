@@ -12,7 +12,7 @@ import {
   transfers,
 } from '../../src/index.js';
 
-// Same image as docker-compose.yml. Keep the two in sync.
+// Same image as docker-compose.yml and apps/indexer/test/integration/harness/postgres.ts. Keep the three in sync.
 const POSTGRES_IMAGE =
   'postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873';
 
