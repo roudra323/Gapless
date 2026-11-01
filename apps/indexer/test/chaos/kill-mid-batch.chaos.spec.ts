@@ -1,5 +1,3 @@
-import { setTimeout as delay } from 'node:timers/promises';
-
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { startIndexerProcess } from '../integration/harness/indexer-process.js';
@@ -57,9 +55,12 @@ describe('kill-mid-batch', () => {
     const killedAt: bigint[] = [];
     for (let kill = 0; kill < 3; kill++) {
       const child = startIndexerProcess(config);
-      await child.waitForLine((line) => line.msg === 'leadership acquired');
-      await delay(20 + Math.floor(random() * 150));
-      child.kill('SIGKILL');
+      // Kill right after a seeded number of commits, while the next batch is in flight.
+      child.killOnLine(
+        (line) => line.msg === 'batch indexed',
+        2 + Math.floor(random() * 5),
+        'SIGKILL',
+      );
       await child.exited;
       expect(await world.rowsAboveCheckpoint()).toBe(0);
       killedAt.push((await world.repository.readCheckpoint())?.lastBlock ?? 0n);

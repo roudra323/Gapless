@@ -15,6 +15,15 @@ export type IndexerProcess = {
   /** Resolves when the process ends. */
   readonly exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
   readonly kill: (signal: NodeJS.Signals) => void;
+  /**
+   * Sends `signal` as soon as the `count`-th matching line is parsed, with no polling delay.
+   * A local batch takes a few milliseconds, so a polled kill would come too late.
+   */
+  readonly killOnLine: (
+    match: (line: LogLine) => boolean,
+    count: number,
+    signal: NodeJS.Signals,
+  ) => void;
   /** Waits for a log line that matches, or throws after `timeoutMs`. */
   readonly waitForLine: (match: (line: LogLine) => boolean, timeoutMs?: number) => Promise<LogLine>;
 };
@@ -40,6 +49,15 @@ export function startIndexerProcess(config: IndexerConfig): IndexerProcess {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const lines: LogLine[] = [];
+  const triggers: { match: (line: LogLine) => boolean; left: number; signal: NodeJS.Signals }[] =
+    [];
+  const push = (line: LogLine) => {
+    lines.push(line);
+    for (const trigger of triggers) {
+      if (trigger.left > 0 && trigger.match(line) && --trigger.left === 0)
+        child.kill(trigger.signal);
+    }
+  };
   let buffer = '';
   const onData = (chunk: Buffer) => {
     buffer += chunk.toString('utf8');
@@ -49,9 +67,9 @@ export function startIndexerProcess(config: IndexerConfig): IndexerProcess {
       buffer = buffer.slice(newline + 1);
       if (text.trim() !== '') {
         try {
-          lines.push(JSON.parse(text) as LogLine);
+          push(JSON.parse(text) as LogLine);
         } catch {
-          lines.push({ msg: '<not json>', text });
+          push({ msg: '<not json>', text });
         }
       }
       newline = buffer.indexOf('\n');
@@ -69,6 +87,9 @@ export function startIndexerProcess(config: IndexerConfig): IndexerProcess {
     exited,
     kill: (signal) => {
       child.kill(signal);
+    },
+    killOnLine: (match, count, signal) => {
+      triggers.push({ match, left: count, signal });
     },
     waitForLine: async (match, timeoutMs = 30_000) => {
       await waitFor(() => lines.some(match), { timeoutMs, description: 'a matching log line' });

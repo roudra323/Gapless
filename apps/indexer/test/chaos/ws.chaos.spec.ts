@@ -1,10 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { startTcpProxy, type TcpProxy } from '../integration/harness/tcp-proxy.js';
 import { seededRandom } from '../integration/harness/token.js';
 import { waitFor } from '../integration/harness/wait-for.js';
 import {
   captureLogs,
+  type InProcessIndexer,
   startInProcess,
   startWorld,
   type World,
@@ -12,6 +13,7 @@ import {
 
 let world: World;
 let proxy: TcpProxy;
+let indexer: InProcessIndexer | undefined;
 const random = seededRandom(23);
 // One capture for the whole file: nestjs-pino's first destination wins (see world.ts).
 const { lines, stream } = captureLogs();
@@ -22,6 +24,13 @@ beforeAll(async () => {
   proxy = await startTcpProxy(world.anvil.rpcUrl);
 });
 
+afterEach(async () => {
+  // Also after a failed test, so the next test starts with no indexer running.
+  await indexer?.stop();
+  indexer = undefined;
+  proxy.resume();
+});
+
 afterAll(async () => {
   await proxy?.close();
   await world?.stop();
@@ -30,7 +39,7 @@ afterAll(async () => {
 describe('ws head trigger', () => {
   it('ws-trigger: a new head on the socket wakes the loop long before the poll would', async () => {
     // The poll runs once at start, then only every 60 s: any fast progress comes from the socket.
-    const indexer = await startInProcess(
+    indexer = await startInProcess(
       world.config({
         CONFIRMATIONS: 0n,
         POLL_INTERVAL_MS: 60_000,
@@ -53,11 +62,12 @@ describe('ws head trigger', () => {
     expect(Date.now() - sent).toBeLessThan(5000);
 
     await indexer.stop();
+    indexer = undefined;
     expect(await world.parity()).toMatchObject({ ok: true });
   });
 
   it('ws-drop: indexing goes on through the poll while the socket is down, then it reconnects', async () => {
-    const indexer = await startInProcess(
+    indexer = await startInProcess(
       world.config({ POLL_INTERVAL_MS: 200, RPC_WS_URL: `ws://${proxy.address}` }),
       stream,
     );
@@ -77,7 +87,11 @@ describe('ws head trigger', () => {
     const whileDown = await world.token.sendTransfers(40, { perBlockMax: 4, random });
     await world.token.mine(2);
     await world.waitForCheckpoint(whileDown, 20_000);
-    expect(count('ws head feed failed to connect')).toBeGreaterThan(0);
+    // The tracker keeps trying (with backoff) while new sockets are refused.
+    await waitFor(() => count('ws head feed failed to connect') > 0, {
+      timeoutMs: 10_000,
+      description: 'a refused reconnect',
+    });
 
     // Let the socket back in: the tracker subscribes again with its own backoff.
     const reconnects = count('ws head feed connected');
@@ -91,6 +105,7 @@ describe('ws head trigger', () => {
     await world.waitForCheckpoint(after);
 
     await indexer.stop();
+    indexer = undefined;
     expect(await world.parity()).toMatchObject({
       ok: true,
       missing: [],
@@ -101,11 +116,12 @@ describe('ws head trigger', () => {
 
   it('no-ws: with RPC_WS_URL unset it indexes by polling alone', async () => {
     const wsLines = count('ws head feed connected');
-    const indexer = await startInProcess(world.config({ RPC_WS_URL: undefined }), stream);
+    indexer = await startInProcess(world.config({ RPC_WS_URL: undefined }), stream);
     const last = await world.token.sendTransfers(30, { perBlockMax: 4, random });
     await world.token.mine(2);
     await world.waitForCheckpoint(last);
     await indexer.stop();
+    indexer = undefined;
 
     expect(count('ws head feed connected')).toBe(wsLines);
     const report = await world.parity();
