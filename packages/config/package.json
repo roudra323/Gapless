@@ -21,6 +21,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "viem": "2.57.13",
     "zod": "4.6.7"
   }
 }

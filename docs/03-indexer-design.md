@@ -70,6 +70,8 @@ On a fresh database there is no checkpoint row, so neither the anchor check nor 
 - Insert the row with `last_block = START_BLOCK - 1` and `last_block_hash` = the chain's hash of block `START_BLOCK - 1`, using `INSERT … ON CONFLICT DO NOTHING` (an existing row is never overwritten).
 - `START_BLOCK` must be `>= 1`, so `START_BLOCK - 1` is a real block (block 0 is genesis, and a token is deployed in block 1 or later). The config schema enforces it.
 
+- Check that `TOKEN_ADDRESS` holds contract code (`eth_getCode` is not empty). A wrong address (a wallet, a token on another chain) makes `getLogs` return empty lists instead of errors, so without this check the indexer would advance over every block and store nothing. No code → log `fatal` and exit non-zero (see "Retry policy"). The config schema already rejects the zero address.
+
 Every batch, including the first, then follows the same anchor check and fenced update.
 
 **Batch size adaptation:** start at `BATCH_SIZE`. If the RPC rejects the range (too many results, response size limit, or timeout), halve it (minimum 1) and retry the same `from`. After 10 consecutive successes, double it, back up to `BATCH_SIZE`. Never skip a range because of an error.
