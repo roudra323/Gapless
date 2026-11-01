@@ -9,10 +9,7 @@ import { PinoLogger } from 'nestjs-pino';
 
 import { INDEXER_CONFIG } from './config.provider.js';
 
-/**
- * Logs the start and the end of the process. Step 8 of Phase 3 starts the ingestion loop from
- * here, and Phase 4 adds graceful shutdown (docs/03 "Graceful shutdown").
- */
+/** Logs the start and the end of the process. `main.ts` starts the ingestion after boot. */
 @Injectable()
 export class LifecycleService implements OnApplicationBootstrap, OnApplicationShutdown {
   // PinoLogger is resolved from the constructor type alone (no @Inject), so it must be a value

@@ -12,8 +12,8 @@ export class RangeInconsistentError extends Error {
 
 /**
  * The chain's hash of the checkpoint block differs from the stored `last_block_hash`: a reorg at
- * or below the checkpoint. Not retryable in Phase 3: the indexer stops, because the rewind
- * (docs/03 "Reorg guard") arrives in Phase 4.
+ * or below the checkpoint. Not an error for the process: the loop runs the proven rewind
+ * (docs/03 "Reorg guard") and continues from the rewound checkpoint.
  */
 export class AnchorMismatchError extends Error {
   constructor(

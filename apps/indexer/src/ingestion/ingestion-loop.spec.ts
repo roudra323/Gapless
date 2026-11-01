@@ -4,7 +4,7 @@ import { type Hex, numberToHex, pad, TimeoutError } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import type { FetchRangeInput } from './batch-fetcher.js';
-import type { Checkpoint, CommitBatchInput } from './indexer.repository.js';
+import type { Checkpoint, CommitBatchInput, RewindInput } from './indexer.repository.js';
 import {
   AnchorMismatchError,
   CheckpointFenceError,
@@ -24,13 +24,18 @@ const SETTINGS: LoopSettings = {
   confirmations: 0n,
   batchSize: 8n,
   pollIntervalMs: 1000,
+  reorgRewindBlocks: 4n,
 };
+
+/** A fetch failure that aborts the loop's signal first, as a lost lock connection does. */
+const LOST = new Error('Client was closed and is not queryable');
 
 type Call = { readonly kind: string; readonly from?: bigint; readonly to?: bigint };
 
 /**
  * A chain with a fixed head and a store in memory. `failures` hands out one error per fetch, in
- * order. The loop stops itself (aborts) once the checkpoint reaches `stopAt`, or after `maxWaits`.
+ * order. The loop stops itself (aborts) once the checkpoint reaches `stopAt`, or after `maxWaits`
+ * waits (backoff waits and head waits both count).
  */
 function setup(
   options: {
@@ -38,36 +43,64 @@ function setup(
     stopAt?: bigint;
     maxWaits?: number;
     failures?: (Error | undefined)[];
+    rewindFailures?: (Error | undefined)[];
     code?: Hex;
     stored?: Checkpoint;
+    /** Stored transfer blocks, for the reorg walk. */
+    storedBlocks?: bigint[];
+    /** Blocks whose chain hash changed (a reorg). */
+    forked?: (block: bigint) => boolean;
   } = {},
 ) {
   const head = options.head ?? 30n;
   const stopAt = options.stopAt ?? head;
   const failures = [...(options.failures ?? [])];
+  const rewindFailures = [...(options.rewindFailures ?? [])];
+  const forked = options.forked ?? (() => false);
+  const chainHash = (block: bigint) => (forked(block) ? hash(block + 1_000_000n) : hash(block));
   const controller = new AbortController();
   const calls: Call[] = [];
   const logs: { level: string; fields: Record<string, unknown>; message: string }[] = [];
+  const delays: number[] = [];
   let row: Checkpoint | null = options.stored ?? null;
   let waits = 0;
+  let beats = 0;
+  const countWait = () => {
+    waits++;
+    if (waits >= (options.maxWaits ?? 1)) controller.abort();
+  };
 
   const chain: ChainPort = {
-    getHead: () => Promise.resolve(head),
     getTokenCode: () => {
       calls.push({ kind: 'getTokenCode' });
       return Promise.resolve(options.code ?? '0x6080');
     },
     getHeader: (block) => {
       calls.push({ kind: 'getHeader', from: block });
-      return Promise.resolve({ number: block, hash: hash(block), timestamp: 0n });
+      return Promise.resolve({ number: block, hash: chainHash(block), timestamp: 0n });
     },
     fetchRange: ({ range, anchor }: Pick<FetchRangeInput, 'range' | 'anchor'>) => {
       calls.push({ kind: 'fetch', from: range.from, to: range.to });
       const failure = failures.shift();
+      if (failure === LOST) controller.abort();
       if (failure !== undefined) return Promise.reject(failure);
-      if (anchor.hash !== hash(anchor.block)) throw new Error('test bug: wrong anchor');
+      if (anchor.hash !== chainHash(anchor.block)) {
+        return Promise.reject(
+          new AnchorMismatchError(anchor.block, anchor.hash, chainHash(anchor.block)),
+        );
+      }
       const rows = [{ blockNumber: range.from } as NewTransferRow];
-      return Promise.resolve({ toHash: hash(range.to), rows });
+      return Promise.resolve({ toHash: chainHash(range.to), rows });
+    },
+  };
+
+  const heads = {
+    latest: () => head,
+    version: () => 0,
+    waitForChange: () => {
+      calls.push({ kind: 'waitHead' });
+      countWait();
+      return Promise.resolve();
     },
   };
 
@@ -90,29 +123,48 @@ function setup(
       if (row.lastBlock >= stopAt) controller.abort();
       return Promise.resolve({ checkpoint: row, inserted: input.rows.length });
     },
+    newestTransferBlockAtOrBelow: (block: bigint) => {
+      const found = (options.storedBlocks ?? []).filter((b) => b <= block).at(-1);
+      return Promise.resolve(
+        found === undefined ? null : { blockNumber: found, blockHash: hash(found) },
+      );
+    },
+    rewind: (input: RewindInput) => {
+      calls.push({ kind: 'rewind', to: input.rewindTo });
+      const failure = rewindFailures.shift();
+      if (failure !== undefined) return Promise.reject(failure);
+      row = { lastBlock: input.rewindTo, lastBlockHash: input.rewindHash, headBlock: head };
+      return Promise.resolve({ checkpoint: row, deleted: 3 });
+    },
   };
 
   const loop = new IngestionLoop({
     chain,
+    heads,
     store,
     settings: SETTINGS,
     logger: {
       info: (fields, message) => logs.push({ level: 'info', fields, message }),
       warn: (fields, message) => logs.push({ level: 'warn', fields, message }),
     },
+    heartbeat: { beat: () => beats++ },
     redact: (err) => ({ redacted: String(err) }),
-    wait: () => {
-      waits++;
+    wait: (ms) => {
+      delays.push(ms);
       calls.push({ kind: 'wait' });
-      if (waits >= (options.maxWaits ?? 1)) controller.abort();
+      countWait();
       return Promise.resolve();
     },
+    random: () => 0.999_999,
   });
 
   return {
     run: () => loop.run(controller.signal),
+    abort: () => controller.abort(),
     calls,
     logs,
+    delays,
+    beats: () => beats,
     ranges: () => calls.filter((call) => call.kind === 'fetch').map((c) => [c.from, c.to]),
     checkpoint: () => row,
   };
@@ -169,12 +221,12 @@ describe('IngestionLoop', () => {
     expect(t.ranges()).toEqual([[26n, 30n]]);
   });
 
-  it('waits for the next poll when it is caught up', async () => {
+  it('waits for the next head when it is caught up', async () => {
     const t = setup({ head: 9n, stopAt: 100n, maxWaits: 2 });
     await t.run();
 
     expect(t.ranges()).toEqual([]);
-    expect(t.calls.filter((call) => call.kind === 'wait')).toHaveLength(2);
+    expect(t.calls.filter((call) => call.kind === 'waitHead')).toHaveLength(2);
   });
 
   it('halves the batch on a rejected range and retries the same range at once', async () => {
@@ -196,7 +248,7 @@ describe('IngestionLoop', () => {
     );
   });
 
-  it('waits instead of halving when the batch is already 1 block', async () => {
+  it('backs off instead of halving when the batch is already 1 block', async () => {
     const tooBig = new TimeoutError({ body: {}, url: 'http://rpc.local' });
     const t = setup({ head: 10n, failures: Array.from({ length: 4 }, () => tooBig), maxWaits: 1 });
     await t.run();
@@ -209,7 +261,7 @@ describe('IngestionLoop', () => {
     ]);
   });
 
-  it('on a transient error, logs warn, reads the checkpoint again and retries after a poll', async () => {
+  it('on a transient error, logs warn, reads the checkpoint again and retries after backoff', async () => {
     const t = setup({
       head: 17n,
       failures: [new RangeInconsistentError('node is behind')],
@@ -219,23 +271,104 @@ describe('IngestionLoop', () => {
 
     const kinds = t.calls.map((call) => call.kind);
     const failedAt = kinds.indexOf('fetch');
-    expect(kinds.slice(failedAt, failedAt + 3)).toEqual(['fetch', 'wait', 'read']);
+    expect(kinds.slice(failedAt, failedAt + 4)).toEqual(['fetch', 'wait', 'getTokenCode', 'read']);
     expect(t.ranges()).toEqual([
       [10n, 17n],
       [10n, 17n],
     ]);
     const warn = t.logs.find((log) => log.level === 'warn');
-    expect(warn?.message).toBe('indexing step failed, retrying on the next poll');
-    expect(warn?.fields).toMatchObject({ fromBlock: '10', toBlock: '17' });
+    expect(warn?.message).toBe('indexing step failed, retrying after backoff');
+    expect(warn?.fields).toMatchObject({
+      fromBlock: '10',
+      toBlock: '17',
+      attempt: 0,
+      delayMs: 499,
+    });
     // The loop logs the redacted copy, never the original error.
     expect(warn?.fields.err).toEqual({
       redacted: expect.stringContaining('node is behind') as unknown,
     });
   });
 
+  it('grows the backoff on each failed step and resets it after a commit', async () => {
+    const down = new Error('connect ECONNREFUSED');
+    const t = setup({ head: 17n, stopAt: 25n, failures: [down, down, down], maxWaits: 10 });
+    await t.run();
+
+    // random() is ~1, so each delay is the backoff ceiling: 500, 1000, 2000 ms.
+    expect(t.delays).toEqual([499, 999, 1999]);
+    const attempts = t.logs.filter((l) => l.level === 'warn').map((l) => l.fields.attempt);
+    expect(attempts).toEqual([0, 1, 2]);
+    expect(t.checkpoint()?.lastBlock).toBe(17n);
+  });
+
+  it('starts the backoff again at attempt 0 after a success', async () => {
+    const down = new Error('connect ECONNREFUSED');
+    const t = setup({ head: 30n, failures: [down, undefined, down], maxWaits: 10 });
+    await t.run();
+    expect(t.logs.filter((l) => l.level === 'warn').map((l) => l.fields.attempt)).toEqual([0, 0]);
+  });
+
+  it('beats the heartbeat on every cycle, also on every retry', async () => {
+    const down = new Error('connect ECONNREFUSED');
+    const t = setup({ head: 9n, failures: [], maxWaits: 3 });
+    await t.run();
+    expect(t.beats()).toBe(3);
+
+    const retries = setup({ head: 10n, failures: [down, down, down, down], maxWaits: 4 });
+    await retries.run();
+    // One beat per attempt: 4 failed fetches, each one a cycle.
+    expect(retries.beats()).toBe(4);
+  });
+
+  it('rewinds on a reorg to a proven block and indexes again from there', async () => {
+    // The checkpoint is at 20 with the old hash of 20; blocks above 14 changed on the chain.
+    const t = setup({
+      head: 24n,
+      stored: { lastBlock: 20n, lastBlockHash: hash(20n), headBlock: 20n },
+      storedBlocks: [11n, 14n, 18n],
+      forked: (block) => block > 14n,
+    });
+    await t.run();
+
+    // candidate = 20 - 4 = 16 → row 14 matches the chain → rewind to 14.
+    expect(t.calls.find((call) => call.kind === 'rewind')?.to).toBe(14n);
+    expect(t.ranges()).toEqual([
+      [21n, 24n],
+      [15n, 22n],
+      [23n, 24n],
+    ]);
+    const warn = t.logs.find((log) => log.message === 'reorg detected, rewinding');
+    expect(warn?.fields).toMatchObject({ block: '20', rewindTo: '14', deleted: 3 });
+    // A reorg is not a failure: no backoff wait.
+    expect(t.delays).toEqual([]);
+  });
+
+  it('treats a failed rewind as transient: it backs off and tries again', async () => {
+    const t = setup({
+      head: 24n,
+      stored: { lastBlock: 20n, lastBlockHash: hash(20n), headBlock: 20n },
+      storedBlocks: [14n],
+      forked: (block) => block > 14n,
+      rewindFailures: [new Error('connection terminated')],
+      maxWaits: 5,
+    });
+    await t.run();
+
+    expect(t.calls.filter((call) => call.kind === 'rewind')).toHaveLength(2);
+    expect(t.delays).toHaveLength(1);
+    expect(t.checkpoint()?.lastBlock).toBe(24n);
+  });
+
+  it('stops without a warning when the signal aborts during a step (lost leadership)', async () => {
+    const t = setup({ head: 17n, failures: [LOST] });
+    await t.run();
+    expect(t.logs.filter((log) => log.level === 'warn')).toEqual([]);
+    expect(t.delays).toEqual([]);
+  });
+
   it.each([
     ['an invalid Transfer log', new InvalidTransferLogError('4 topics')],
-    ['a reorg (the rewind is Phase 4)', new AnchorMismatchError(9n, hash(9n), hash(99n))],
     ['a fence miss', new CheckpointFenceError(9n)],
   ])('stops on %s', async (_label, fatal) => {
     const t = setup({ head: 17n, failures: [fatal] });
@@ -263,13 +396,17 @@ describe('IngestionLoop', () => {
     controller.abort();
     const loop = new IngestionLoop({
       chain: {} as ChainPort,
+      heads: { latest: () => 1n, version: () => 0, waitForChange: () => Promise.resolve() },
       store: {
         seedCheckpoint: () => Promise.reject(new Error('used')),
         readCheckpoint: () => Promise.reject(new Error('used')),
         commitBatch: () => Promise.reject(new Error('used')),
+        newestTransferBlockAtOrBelow: () => Promise.reject(new Error('used')),
+        rewind: () => Promise.reject(new Error('used')),
       },
       settings: SETTINGS,
       logger: { info: () => undefined, warn: () => undefined },
+      heartbeat: { beat: () => undefined },
       redact: (err) => err,
       wait: () => Promise.resolve(),
     });

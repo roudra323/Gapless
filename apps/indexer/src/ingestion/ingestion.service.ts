@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { redactRpcUrl } from '@gapless/chain';
+import { redactRpcUrl, subscribeNewHeads } from '@gapless/chain';
 import type { IndexerConfig } from '@gapless/config';
 import type { DbHandle } from '@gapless/db';
 import {
@@ -13,8 +13,14 @@ import { PinoLogger } from 'nestjs-pino';
 import { numberToHex, type PublicClient } from 'viem';
 
 import { INDEXER_CONFIG } from '../config.provider.js';
+import { HeadTracker } from '../head/head-tracker.js';
+import { Heartbeat } from '../health/heartbeat.js';
+import { LeaderLock } from '../leader/leader-lock.js';
+import { LeaderStatus } from '../leader/leader-status.js';
+import { advisoryLockKey } from '../leader/lock-key.js';
 import { fetchRange } from './batch-fetcher.js';
 import { IndexerRepository } from './indexer.repository.js';
+import { IndexerSupervisor } from './indexer-supervisor.js';
 import { DB_HANDLE, RPC_CLIENT } from './ingestion.providers.js';
 import { IngestionLoop } from './ingestion-loop.js';
 import { toBlockHeader } from './range-consistency.js';
@@ -30,62 +36,32 @@ async function wait(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * Connects the ingestion loop to viem and Postgres and owns its lifetime. `main.ts` calls `run`
- * after boot. On shutdown the loop is stopped between steps, then the pool is closed.
+ * Connects the indexer's parts and owns their lifetime: the head tracker (HTTP poll + optional
+ * WebSocket), the advisory lock, and the ingestion loop that runs while this process leads.
+ * `main.ts` calls `run` after boot. On shutdown the loop stops between steps, the lock is
+ * released, the socket is closed, and then the pool is closed.
  */
 @Injectable()
 export class IngestionService implements BeforeApplicationShutdown, OnApplicationShutdown {
   private readonly abort = new AbortController();
   private running: Promise<void> | undefined;
 
-  // PinoLogger is a value import: Nest resolves it from the constructor type (docs/05).
+  // Value imports: Nest resolves these from the constructor types (docs/05).
   constructor(
     private readonly logger: PinoLogger,
     @Inject(INDEXER_CONFIG) private readonly config: IndexerConfig,
     @Inject(RPC_CLIENT) private readonly client: PublicClient,
     @Inject(DB_HANDLE) private readonly db: DbHandle,
+    private readonly heartbeat: Heartbeat,
+    private readonly leaderStatus: LeaderStatus,
   ) {
     logger.setContext(IngestionService.name);
   }
 
-  /** Runs the loop until shutdown (resolves) or a fatal error (rejects). Call it once. */
+  /** Runs until shutdown (resolves) or a fatal error (rejects). Call it once. */
   run(): Promise<void> {
     if (this.running !== undefined) throw new Error('IngestionService.run was already called');
-    const { config, client } = this;
-    const tokenAddress = config.TOKEN_ADDRESS;
-    const loop = new IngestionLoop({
-      chain: {
-        getHead: () => client.getBlockNumber(),
-        getTokenCode: () =>
-          client.request({ method: 'eth_getCode', params: [tokenAddress, 'latest'] }),
-        getHeader: async (block) =>
-          toBlockHeader(
-            await client.request({
-              method: 'eth_getBlockByNumber',
-              params: [numberToHex(block), false],
-            }),
-            block,
-          ),
-        fetchRange: (input) =>
-          fetchRange(client, { ...input, chainId: config.CHAIN_ID, tokenAddress }),
-      },
-      store: new IndexerRepository(this.db.db, config.CHAIN_ID, tokenAddress),
-      logger: {
-        info: (fields, message) => this.logger.info(fields, message),
-        warn: (fields, message) => this.logger.warn(fields, message),
-      },
-      settings: {
-        chainId: config.CHAIN_ID,
-        tokenAddress,
-        startBlock: config.START_BLOCK,
-        confirmations: config.CONFIRMATIONS,
-        batchSize: config.BATCH_SIZE,
-        pollIntervalMs: config.POLL_INTERVAL_MS,
-      },
-      redact: (err) => redactRpcUrl(err, config.RPC_HTTP_URL),
-      wait,
-    });
-    this.running = loop.run(this.abort.signal);
+    this.running = this.runAll();
     return this.running;
   }
 
@@ -98,5 +74,82 @@ export class IngestionService implements BeforeApplicationShutdown, OnApplicatio
 
   async onApplicationShutdown(): Promise<void> {
     await this.db.close();
+  }
+
+  private async runAll(): Promise<void> {
+    const { config, client, logger } = this;
+    const tokenAddress = config.TOKEN_ADDRESS;
+    const wsUrl = config.RPC_WS_URL;
+    // viem errors carry the request URL, which may hold an API key: hide both RPC URLs.
+    const redact = (err: unknown) =>
+      redactRpcUrl(redactRpcUrl(err, config.RPC_HTTP_URL), wsUrl ?? '');
+    const log = {
+      info: (fields: Record<string, unknown>, message: string) => logger.info(fields, message),
+      warn: (fields: Record<string, unknown>, message: string) => logger.warn(fields, message),
+    };
+
+    const heads = new HeadTracker({
+      sources: {
+        pollHead: () => client.getBlockNumber(),
+        subscribeHeads:
+          wsUrl === undefined
+            ? undefined
+            : (handlers) => subscribeNewHeads({ url: wsUrl, ...handlers }),
+      },
+      pollIntervalMs: config.POLL_INTERVAL_MS,
+      logger: log,
+      redact,
+      wait,
+    });
+
+    const getHeader = async (block: bigint) =>
+      toBlockHeader(
+        await client.request({
+          method: 'eth_getBlockByNumber',
+          params: [numberToHex(block), false],
+        }),
+        block,
+      );
+
+    const supervisor = new IndexerSupervisor({
+      lock: new LeaderLock(this.db.pool, advisoryLockKey(config.CHAIN_ID, tokenAddress), log),
+      createLoop: (session) =>
+        new IngestionLoop({
+          chain: {
+            getTokenCode: () =>
+              client.request({ method: 'eth_getCode', params: [tokenAddress, 'latest'] }),
+            getHeader,
+            fetchRange: (input) =>
+              fetchRange(client, { ...input, chainId: config.CHAIN_ID, tokenAddress }),
+          },
+          heads,
+          // Every write runs in the session that holds the lock (docs/03 "Leader").
+          store: new IndexerRepository(session.db, config.CHAIN_ID, tokenAddress),
+          logger: log,
+          settings: {
+            chainId: config.CHAIN_ID,
+            tokenAddress,
+            startBlock: config.START_BLOCK,
+            confirmations: config.CONFIRMATIONS,
+            batchSize: config.BATCH_SIZE,
+            pollIntervalMs: config.POLL_INTERVAL_MS,
+            reorgRewindBlocks: config.REORG_REWIND_BLOCKS,
+          },
+          heartbeat: this.heartbeat,
+          redact,
+          wait,
+        }),
+      heartbeat: this.heartbeat,
+      leaderStatus: this.leaderStatus,
+      logger: log,
+      wait,
+    });
+
+    heads.start();
+    try {
+      await supervisor.run(this.abort.signal);
+    } finally {
+      await heads.stop();
+    }
   }
 }
