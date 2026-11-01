@@ -1,6 +1,6 @@
 # 04 — Tech Stack & Version Policy
 
-_Last reviewed: 2026-10-21. Re-review whenever a phase starts._
+_Last reviewed: 2026-11-02 (Phase 4). `pnpm outdated -r` showed only oxlint 1.90.0 (a minor, for Renovate), @types/node 26 (stays on 24 with Node 24) and TypeScript 7 (stays on 6, see below). No banned package is in use. Re-review whenever a phase starts._
 
 ## Version policy
 

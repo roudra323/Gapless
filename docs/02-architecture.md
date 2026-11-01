@@ -65,16 +65,16 @@ gapless/
 ├── apps/
 │   ├── indexer/
 │   │   ├── src/
-│   │   │   ├── main.ts  app.module.ts  lifecycle.service.ts  config.provider.ts  verify.ts
-│   │   │   ├── ingestion/     # loop, range planner, batch size, fetch + consistency checks, repository (reorg handler: P4)
+│   │   │   ├── main.ts  app.module.ts  shared.module.ts  lifecycle.service.ts  config.provider.ts  verify.ts
+│   │   │   ├── ingestion/     # loop, supervisor, range planner, batch size, backoff, fetch + checks, reorg rewind, repository
 │   │   │   ├── verify/        # the parity check used by verify.ts and the tests
 │   │   │   ├── head/          # head tracker (WS trigger + poll fallback)
 │   │   │   ├── leader/        # advisory-lock leadership
 │   │   │   ├── health/        # /healthz /readyz
 │   │   │   └── metrics/       # indexer metric definitions
 │   │   └── test/
-│   │       ├── integration/   # harness/ (anvil, Postgres, MockToken, waitFor) + *.int.spec.ts
-│   │       └── chaos/
+│   │       ├── integration/   # harness/ (anvil, Postgres, MockToken, proxies, child process, waitFor) + *.int.spec.ts
+│   │       └── chaos/         # *.chaos.spec.ts (pnpm test:chaos)
 │   └── api/
 │       ├── src/
 │       │   ├── main.ts  app.module.ts               (P5)

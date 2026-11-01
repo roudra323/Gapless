@@ -2,15 +2,15 @@
 
 ## Layers
 
-| Layer           | Tool                                                   | Location                                           | Runs in                                      | From phase          |
-| --------------- | ------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------- | ------------------- |
-| Unit            | Vitest                                                 | `*.spec.ts` beside the code                        | `pnpm test`, every PR                        | 0                   |
-| Contracts       | `forge test`                                           | `contracts/test/`                                  | every PR touching `contracts/`               | 1                   |
-| Integration     | Vitest + Testcontainers (Postgres 18, Redis 8) + anvil | `{apps,packages}/*/test/integration/*.int.spec.ts` | `pnpm test:integration`, every PR            | 2 (DB), 3 (indexer) |
-| Chaos (indexer) | Vitest + anvil + Testcontainers                        | `apps/indexer/test/chaos/`                         | every PR (keep them fast: under 2 min total) | 4                   |
-| API e2e         | Vitest + supertest against a booted Nest app           | `apps/api/test/e2e/`                               | every PR                                     | 5                   |
-| Manifests       | `helm lint`, `helm template \| kubeconform -strict`    | `deploy/`                                          | every PR touching `deploy/`                  | 8                   |
-| Infra           | `terraform fmt -check`, `terraform validate`, `tflint` | `infra/`                                           | every PR touching `infra/`                   | 9                   |
+| Layer           | Tool                                                   | Location                                           | Runs in                                                         | From phase          |
+| --------------- | ------------------------------------------------------ | -------------------------------------------------- | --------------------------------------------------------------- | ------------------- |
+| Unit            | Vitest                                                 | `*.spec.ts` beside the code                        | `pnpm test`, every PR                                           | 0                   |
+| Contracts       | `forge test`                                           | `contracts/test/`                                  | every PR touching `contracts/`                                  | 1                   |
+| Integration     | Vitest + Testcontainers (Postgres 18, Redis 8) + anvil | `{apps,packages}/*/test/integration/*.int.spec.ts` | `pnpm test:integration`, every PR                               | 2 (DB), 3 (indexer) |
+| Chaos (indexer) | Vitest + anvil + Testcontainers                        | `apps/indexer/test/chaos/*.chaos.spec.ts`          | `pnpm test:chaos`, every PR (keep them fast: under 2 min total) | 4                   |
+| API e2e         | Vitest + supertest against a booted Nest app           | `apps/api/test/e2e/`                               | every PR                                                        | 5                   |
+| Manifests       | `helm lint`, `helm template \| kubeconform -strict`    | `deploy/`                                          | every PR touching `deploy/`                                     | 8                   |
+| Infra           | `terraform fmt -check`, `terraform validate`, `tflint` | `infra/`                                           | every PR touching `infra/`                                      | 9                   |
 
 ## What must be unit tested
 
@@ -44,6 +44,14 @@ Every test ends with the **parity assertion**: for the whole range, the set of `
 | `graceful-shutdown` | SIGTERM during a batch → the batch commits or rolls back fully, and the process exits 0 within the timeout.                                                                                                                               |
 
 Simulate a flaky RPC with a tiny in-test HTTP/WS proxy in front of anvil. Don't mock viem for these; the point is to exercise real behavior.
+
+How the chaos tests are built (`apps/indexer/test/chaos/*.chaos.spec.ts`, run with `pnpm test:chaos`, which builds the indexer first):
+
+- **Proxies:** `harness/rpc-proxy.ts` (JSON-RPC over HTTP, single and batch: fail a request with 429, 500 or a reset, or answer one call itself) and `harness/tcp-proxy.ts` (a plain TCP pipe for the WebSocket: drop every connection, refuse new ones).
+- **Real signals:** `kill-mid-batch` and `graceful-shutdown` run `dist/main.js` as a child process (`harness/indexer-process.ts`), so SIGKILL and SIGTERM and the exit code are real.
+- **Mid-transaction without timing guesses:** `harness/row-hold.ts` locks the checkpoint row (`SELECT … FOR UPDATE`). The indexer's batch then inserts its rows and blocks on the checkpoint UPDATE in its open transaction (visible in `pg_stat_activity`), and the test acts at exactly that point.
+- **Metrics come in Phase 6.** Until then, where a scenario above says a metric increments (`rpc-flaky`, `reorg`), the test checks the matching `warn` log line instead (`indexing step failed, retrying after backoff`, `reorg detected, rewinding`). Add the metric assertions in Phase 6.
+- One file per scenario group, each with its own containers. The whole suite runs in about 40 s locally.
 
 ## API tests
 

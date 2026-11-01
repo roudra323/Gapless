@@ -25,6 +25,9 @@ So a dropped socket can never cause a gap. There's nothing to "replay", because 
 - **Poll source:** every `POLL_INTERVAL_MS`, call `getBlockNumber()` over HTTP. This **always runs**, even when the WebSocket is healthy. It's cheap and guarantees progress.
 - Sets metrics `gapless_indexer_ws_connected` and `gapless_indexer_ws_reconnects_total`. If socket state isn't directly observable, treat the WebSocket as disconnected when no WS head has arrived for more than `3 × expected block time`.
 - If `RPC_WS_URL` is unset, it runs poll-only. That's a valid production mode.
+- **Our code owns the reconnect.** `subscribeNewHeads` (`packages/chain`) turns viem's own reconnect off (`reconnect: false`, `retryCount: 0`), and `HeadTracker` subscribes again after `backoffDelay` when the socket dies, forever. viem's default would bypass the retry policy below and give up after 5 attempts.
+- `waitForChange` takes the version seen before planning, so a head that arrives between the plan and the wait still wakes the loop at once.
+- The "no WS head for 3 × block time" stall rule arrives with the `ws_connected` gauge in Phase 6. A local anvil mines only on demand, so a healthy socket can be silent for a long time.
 
 ### Leader (`leader/`)
 
@@ -33,6 +36,8 @@ So a dropped socket can never cause a gap. There's nothing to "replay", because 
 - **Every write (batches and reorg rewinds) runs on that same lock connection**, never on another pool connection. The lock and the write transaction then belong to one Postgres session: if the connection drops, Postgres releases the lock and rolls back the open transaction together, and while the session is alive no other process can take the lock. A write from a former leader (a "zombie" writer) can't commit after a new leader starts. The loop is sequential, so one write connection is enough.
 - Attach an `'error'` listener to the held lock client itself. The pool's `'error'` listener only covers idle clients, so without its own listener a dropped socket on the checked-out client crashes the process before leadership can be given up cleanly.
 - On any error on the lock connection: destroy it (release it with the error, so the pool doesn't reuse it), set `isLeader = false`, abort the current batch, and go back to retrying. Never reuse that connection.
+- Also listen for `'end'` on the lock client: a session that ends while a query runs gives the error to that query, and leadership is lost either way.
+- The key is `advisoryLockKey(chainId, token)` (`leader/lock-key.ts`): the first 8 bytes of `keccak256("gapless:indexer:<chainId>:<token>")` as a signed 64-bit integer.
 - This is defense in depth. Kubernetes already runs 1 replica with `Recreate`, but a stuck pod or a manual mistake must never produce two writers.
 
 ### Ingestion loop (`ingestion/`)
@@ -125,6 +130,7 @@ Part of every batch request (the anchor, see "RPC consistency checks"):
 
 - `app.enableShutdownHooks()`. On SIGTERM: set `running = false`, let the **current transaction finish** (don't abort mid-transaction), close the WebSocket, release the advisory lock, close the DB pools, and exit 0.
 - If not finished within `SHUTDOWN_TIMEOUT_MS`, exit anyway. The transaction rolls back and the checkpoint is still consistent.
+- Exit codes: `enableShutdownHooks(['SIGTERM', 'SIGINT'], { useProcessExit: true })` ends a clean shutdown with **0**. (Without `useProcessExit`, Nest re-raises the signal and the code is 143.) The timeout logs `fatal` and exits **1**. A signal that arrives before boot has finished is a plain kill, because the hooks don't exist yet.
 - The pod's `terminationGracePeriodSeconds` must be greater than `SHUTDOWN_TIMEOUT_MS`.
 
 ### Health
@@ -133,6 +139,7 @@ Part of every batch request (the anchor, see "RPC consistency checks"):
   - Record the heartbeat on **every loop step that proves the process is working**: each loop cycle, **each retry attempt** (one cycle can retry for minutes during an RPC outage), and **each leader-wait attempt** (a process that isn't leader never runs the loop). Ticking only once per loop cycle would restart a healthy pod during an RPC outage.
 - **Readiness `/readyz`:** the process is the leader and the DB is reachable.
 - **Lag is a metric and an alert, never a probe.**
+- Both endpoints are served by a small `node:http` server (`health/health-server.ts`) on `METRICS_PORT`, not by a Nest HTTP adapter. Phase 6 adds `GET /metrics` to the same server. The bodies are fixed (`{"status":"ok"}` or `{"status":"unavailable"}`), so an error text can never leak. The DB check for readiness is `select 1` with a 2 s limit.
 
 ## Known trade-offs
 
