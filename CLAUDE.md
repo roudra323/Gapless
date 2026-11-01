@@ -56,6 +56,8 @@ pnpm test:integration        # testcontainers + anvil
 # Phase 3
 pnpm indexer:start           # build the indexer and its packages, then run it (reads .env)
 pnpm verify                  # compare DB vs getLogs for a block range (gaps/duplicates)
+# Phase 4
+pnpm test:chaos              # build the indexer, then the chaos tests (testcontainers + anvil)
 # Phase 8
 make kind-up                 # local cluster + gateway + monitoring stack
 make kind-deploy             # build images, kind load, helm upgrade (local values)
