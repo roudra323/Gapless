@@ -5,6 +5,7 @@ import { LoggerModule } from 'nestjs-pino';
 import type { DestinationStream } from 'pino';
 
 import { indexerConfigProvider } from './config.provider.js';
+import { IngestionModule } from './ingestion/ingestion.module.js';
 import { LifecycleService } from './lifecycle.service.js';
 
 /** The `service` field on every log line of this process (docs/09 "Logs"). */
@@ -33,6 +34,7 @@ export class AppModule {
       imports: [
         // nestjs-pino builds its one root logger on first use, so it works without an HTTP server.
         LoggerModule.forRoot({ pinoHttp: logDestination ? [options, logDestination] : options }),
+        IngestionModule.forRoot(config),
       ],
       providers: [indexerConfigProvider(config), LifecycleService],
     };
