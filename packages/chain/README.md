@@ -2,7 +2,7 @@
 
 The viem HTTP client, the `Transfer` ABI and decoder, error redaction, and the `normalizeAddress` / `toChecksum` helpers. Framework-free: functions take plain values, not app config.
 
-- **Built in:** Phase 3 (HTTP only; the WebSocket client comes in Phase 4)
+- **Built in:** Phase 3 (HTTP client, Transfer decoding, errors), Phase 4 (WebSocket `newHeads`)
 - **Read first:** `docs/03-indexer-design.md` ("RPC consistency checks", "Retry policy"), `docs/05-coding-conventions.md` (blockchain values)
 
 ## Usage
