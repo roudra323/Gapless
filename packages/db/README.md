@@ -16,11 +16,12 @@ const { db, close } = createDb({
 });
 ```
 
-| Export                               | Purpose                                                                |
-| ------------------------------------ | ---------------------------------------------------------------------- |
-| `transfers`, `indexerCheckpoints`    | Drizzle tables (see `docs/02` "Data model")                            |
-| `createDb`                           | Lazy `pg` pool + typed Drizzle instance; `close()` at shutdown         |
-| `runMigrations`, `MIGRATIONS_FOLDER` | Apply the committed migrations (used by the migrate command and tests) |
+| Export                               | Purpose                                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `transfers`, `indexerCheckpoints`    | Drizzle tables (see `docs/02` "Data model")                                                                               |
+| `createDb`                           | Lazy `pg` pool + typed Drizzle instance; `close()` at shutdown                                                            |
+| `createSessionDb`                    | Typed Drizzle instance on one checked-out client (`DbClient`): all queries in one session (the indexer's lock connection) |
+| `runMigrations`, `MIGRATIONS_FOLDER` | Apply the committed migrations (used by the migrate command and tests)                                                    |
 
 ## Commands
 
