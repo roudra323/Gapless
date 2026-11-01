@@ -45,3 +45,19 @@ export async function waitForBlockedWriter(handle: DbHandle, timeoutMs = 30_000)
     { timeoutMs, description: 'an indexer transaction blocked on the checkpoint row' },
   );
 }
+
+/**
+ * True when the blocked indexer transaction runs in the session that holds the advisory lock.
+ * docs/03 "Leader": every write must run on the lock connection, so a former leader can never
+ * commit after it lost the lock.
+ */
+export async function blockedWriterHoldsLock(handle: DbHandle): Promise<boolean> {
+  const result = await handle.pool.query<{ same: boolean }>(
+    `select exists (
+       select 1 from pg_stat_activity a
+       join pg_locks l on l.pid = a.pid and l.locktype = 'advisory' and l.granted
+       where a.application_name = 'gapless-indexer' and a.wait_event_type = 'Lock'
+     ) as same`,
+  );
+  return result.rows[0]?.same === true;
+}

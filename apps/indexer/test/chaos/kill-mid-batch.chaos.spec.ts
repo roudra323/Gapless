@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { startIndexerProcess } from '../integration/harness/indexer-process.js';
-import { holdCheckpointRow, waitForBlockedWriter } from '../integration/harness/row-hold.js';
+import {
+  blockedWriterHoldsLock,
+  holdCheckpointRow,
+  waitForBlockedWriter,
+} from '../integration/harness/row-hold.js';
 import { seededRandom } from '../integration/harness/token.js';
 import { startWorld, type World } from '../integration/harness/world.js';
 
@@ -27,6 +31,8 @@ describe('kill-mid-batch', () => {
     const hold = await holdCheckpointRow(world.pg.handle);
     const first = startIndexerProcess(config);
     await waitForBlockedWriter(world.pg.handle);
+    // The batch writes in the session that holds the advisory lock (docs/03 "Leader").
+    expect(await blockedWriterHoldsLock(world.pg.handle)).toBe(true);
     const before = await world.repository.readCheckpoint();
     first.kill('SIGKILL');
     expect((await first.exited).signal).toBe('SIGKILL');
