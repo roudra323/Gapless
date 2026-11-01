@@ -6,6 +6,7 @@ import { Logger, PinoLogger } from 'nestjs-pino';
 import { describe, expect, it } from 'vitest';
 
 import { AppModule } from './app.module.js';
+import { HealthService } from './health/health.service.js';
 import { LifecycleService } from './lifecycle.service.js';
 
 const TEST_CONFIG: IndexerConfig = {
@@ -46,7 +47,7 @@ describe('AppModule', () => {
 
   // nestjs-pino keeps one root logger per module graph (its first destination wins), and Vitest
   // gives each spec file its own graph. So this file boots one application, in one test.
-  it('logs JSON through nestjs-pino from boot to shutdown, with no HTTP server', async () => {
+  it('logs JSON through nestjs-pino from boot to shutdown, and serves the health endpoints', async () => {
     const { lines, stream, find } = captureLogs();
     // The same options as main.ts. With abortOnError, a DI failure would abort the test worker.
     const app = await NestFactory.createApplicationContext(AppModule.forRoot(TEST_CONFIG, stream), {
@@ -73,6 +74,12 @@ describe('AppModule', () => {
     expect(
       lines.some((line) => line.context === 'InstanceLoader' && line.service === 'indexer'),
     ).toBe(true);
+
+    // The health server is up at boot. Nothing leads yet: live, but not ready.
+    const port = app.get(HealthService).port();
+    expect(find('health server listening')).toMatchObject({ port });
+    expect((await fetch(`http://127.0.0.1:${port}/healthz`)).status).toBe(200);
+    expect((await fetch(`http://127.0.0.1:${port}/readyz`)).status).toBe(503);
 
     const logger = await app.resolve(PinoLogger);
     // pino-http wraps the err serializer; the inner errors of a cause must survive it.
