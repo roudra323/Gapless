@@ -183,3 +183,87 @@ describe('IndexerRepository', () => {
     expect(await pg.handle.db.$count(transfers)).toBe(7000);
   });
 });
+
+describe('IndexerRepository reorg support', () => {
+  const other = () => new IndexerRepository(pg.handle.db, CHAIN_ID, OTHER_TOKEN);
+
+  async function indexed(blocks: readonly bigint[], to: bigint): Promise<void> {
+    await repo.seedCheckpoint(SEED);
+    await repo.commitBatch({
+      rows: blocks.map((block) => row(block, 0)),
+      from: 10n,
+      to,
+      toHash: hash(Number(to)),
+      headBlock: to,
+    });
+  }
+
+  it('finds the newest stored block at or below a block', async () => {
+    await indexed([10n, 12n, 15n], 20n);
+    expect(await repo.newestTransferBlockAtOrBelow(14n)).toEqual({
+      blockNumber: 12n,
+      blockHash: hash(12),
+    });
+    expect(await repo.newestTransferBlockAtOrBelow(15n)).toEqual({
+      blockNumber: 15n,
+      blockHash: hash(15),
+    });
+    expect(await repo.newestTransferBlockAtOrBelow(9n)).toBeNull();
+  });
+
+  it('ignores the rows of other tokens when it looks for a stored block', async () => {
+    await indexed([10n], 20n);
+    await other().seedCheckpoint(SEED);
+    await other().commitBatch({
+      rows: [row(13n, 0, OTHER_TOKEN)],
+      from: 10n,
+      to: 13n,
+      toHash: hash(13),
+      headBlock: 13n,
+    });
+    expect((await repo.newestTransferBlockAtOrBelow(20n))?.blockNumber).toBe(10n);
+  });
+
+  it('deletes the rows above the target and moves the checkpoint back in one commit', async () => {
+    await indexed([10n, 12n, 15n, 18n], 20n);
+
+    const result = await repo.rewind({
+      rewindTo: 12n,
+      rewindHash: hash(12),
+      expectedLastBlock: 20n,
+    });
+
+    expect(result.deleted).toBe(2);
+    expect(result.checkpoint).toMatchObject({ lastBlock: 12n, lastBlockHash: hash(12) });
+    expect(await repo.readCheckpoint()).toMatchObject({ lastBlock: 12n, lastBlockHash: hash(12) });
+    expect((await repo.transferKeys(0n, 100n)).length).toBe(2);
+  });
+
+  it('keeps the rows of other tokens on a rewind', async () => {
+    await indexed([15n], 20n);
+    await other().seedCheckpoint(SEED);
+    await other().commitBatch({
+      rows: [row(15n, 1, OTHER_TOKEN)],
+      from: 10n,
+      to: 20n,
+      toHash: hash(20),
+      headBlock: 20n,
+    });
+
+    await repo.rewind({ rewindTo: 9n, rewindHash: hash(9), expectedLastBlock: 20n });
+
+    expect(await pg.handle.db.$count(transfers)).toBe(1);
+    expect((await other().readCheckpoint())?.lastBlock).toBe(20n);
+  });
+
+  it('deletes nothing when the fence does not match', async () => {
+    await indexed([10n, 15n], 20n);
+
+    await expect(
+      repo.rewind({ rewindTo: 9n, rewindHash: hash(9), expectedLastBlock: 19n }),
+    ).rejects.toBeInstanceOf(CheckpointFenceError);
+
+    expect(await pg.handle.db.$count(transfers)).toBe(2);
+    expect((await repo.readCheckpoint())?.lastBlock).toBe(20n);
+  });
+});

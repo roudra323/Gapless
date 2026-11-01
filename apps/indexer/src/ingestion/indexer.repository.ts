@@ -1,8 +1,9 @@
 import { type Database, indexerCheckpoints, type NewTransferRow, transfers } from '@gapless/db';
-import { and, between, eq, sql } from 'drizzle-orm';
+import { and, between, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import type { Address, Hex } from 'viem';
 
 import { CheckpointFenceError } from './ingestion-errors.js';
+import type { StoredBlock } from './reorg.js';
 
 /** The indexer's progress for one chain and token (docs/02 `indexer_checkpoints`). */
 export type Checkpoint = {
@@ -29,6 +30,21 @@ export type TransferKey = {
   readonly logIndex: number;
 };
 
+export type RewindInput = {
+  /** The new `last_block` (from `findRewindTarget`). */
+  readonly rewindTo: bigint;
+  /** The chain's hash of `rewindTo`. */
+  readonly rewindHash: Hex;
+  /** The `last_block` the rewind starts from: the fence. */
+  readonly expectedLastBlock: bigint;
+};
+
+export type RewindResult = {
+  readonly checkpoint: Checkpoint;
+  /** Rows deleted (every row of this token above `rewindTo`). */
+  readonly deleted: number;
+};
+
 export type CommitBatchResult = {
   /** The checkpoint row as the transaction left it. */
   readonly checkpoint: Checkpoint;
@@ -51,8 +67,8 @@ const checkpointFields = {
 /**
  * The only place the indexer uses Drizzle. Every method works on one chain and token.
  *
- * It takes a `Database` instead of opening one, so Phase 4 can pass a Drizzle instance bound to
- * the advisory-lock connection (docs/03 "Leader").
+ * It takes a `Database` instead of opening one: the indexer passes the Drizzle instance bound to
+ * the advisory-lock connection, so every write runs in the leader's session (docs/03 "Leader").
  */
 export class IndexerRepository {
   constructor(
@@ -60,6 +76,10 @@ export class IndexerRepository {
     private readonly chainId: number,
     private readonly tokenAddress: Address,
   ) {}
+
+  private transfersOfThisToken() {
+    return and(eq(transfers.chainId, this.chainId), eq(transfers.tokenAddress, this.tokenAddress));
+  }
 
   private matchesThisToken() {
     return and(
@@ -98,13 +118,44 @@ export class IndexerRepository {
     return this.db
       .select({ txHash: transfers.txHash, logIndex: transfers.logIndex })
       .from(transfers)
-      .where(
-        and(
-          eq(transfers.chainId, this.chainId),
-          eq(transfers.tokenAddress, this.tokenAddress),
-          between(transfers.blockNumber, from, to),
-        ),
-      );
+      .where(and(this.transfersOfThisToken(), between(transfers.blockNumber, from, to)));
+  }
+
+  /** The newest stored transfer block `<= block`, for the reorg walk (docs/03 "Reorg guard"). */
+  async newestTransferBlockAtOrBelow(block: bigint): Promise<StoredBlock | null> {
+    const [row] = await this.db
+      .select({ blockNumber: transfers.blockNumber, blockHash: transfers.blockHash })
+      .from(transfers)
+      .where(and(this.transfersOfThisToken(), lte(transfers.blockNumber, block)))
+      .orderBy(desc(transfers.blockNumber))
+      .limit(1);
+    // The DB check constraint guarantees the lowercase 32-byte hash format.
+    return row === undefined
+      ? null
+      : { blockNumber: row.blockNumber, blockHash: row.blockHash as Hex };
+  }
+
+  /**
+   * Deletes every row of this token above `rewindTo` and moves the checkpoint back to it, in one
+   * transaction (docs/03 "Reorg guard", step 4). The update is fenced on `expectedLastBlock`: if
+   * another writer moved the checkpoint, it throws `CheckpointFenceError` and nothing is deleted.
+   */
+  async rewind({ rewindTo, rewindHash, expectedLastBlock }: RewindInput): Promise<RewindResult> {
+    return this.db.transaction(async (tx) => {
+      const deleted = await tx
+        .delete(transfers)
+        .where(and(this.transfersOfThisToken(), gt(transfers.blockNumber, rewindTo)))
+        .returning({ logIndex: transfers.logIndex });
+
+      const [row] = await tx
+        .update(indexerCheckpoints)
+        .set({ lastBlock: rewindTo, lastBlockHash: rewindHash, updatedAt: sql`now()` })
+        .where(and(this.matchesThisToken(), eq(indexerCheckpoints.lastBlock, expectedLastBlock)))
+        .returning(checkpointFields);
+      if (row === undefined) throw new CheckpointFenceError(expectedLastBlock);
+
+      return { checkpoint: toCheckpoint(row), deleted: deleted.length };
+    });
   }
 
   /**
