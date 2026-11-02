@@ -3,9 +3,9 @@
 ## Global rules for every workflow
 
 - **Pin every action to a full commit SHA**, with the version in a trailing comment: `uses: actions/checkout@<sha> # v5.x.x`. Renovate updates them.
-- Least privilege: top-level `permissions: {}` (or `contents: read`), and grant more per job only where needed (`id-token: write` only on jobs that authenticate to GCP).
+- Least privilege: top-level `permissions: {}` (or `contents: read`), and grant more per job only where needed (`id-token: write` only on jobs that authenticate to AWS).
 - `concurrency` groups: cancel superseded PR runs; **never** cancel an in-progress deploy (`cancel-in-progress: false` for deploy).
-- No secrets in logs. No long-lived GCP keys. GCP auth is only via `google-github-actions/auth` with Workload Identity Federation.
+- No secrets in logs. No static AWS access keys. AWS auth is only via `aws-actions/configure-aws-credentials` assuming the deployer role through GitHub OIDC (`role-to-assume`).
 - Node version comes from `.nvmrc`; pnpm comes from the `packageManager` field. Cache the pnpm store.
 - Use path filters, so infra jobs run only when `infra/**` changes and contract jobs only when `contracts/**` changes. Filter **inside the job** (a `git diff` step against the PR base or the previous push, with later steps gated on its output), not with workflow-level `paths:`. The job then always reports a status, so branch protection can require it. A job with a filter also runs when its own workflow file changes.
 
@@ -28,20 +28,22 @@ Add each job in the phase that brings its tool, not before. Branch protection on
 
 ### `deploy.yml`: on `push` to `main` (after CI succeeds) and `workflow_dispatch`
 
-Uses a GitHub **Environment** `dev` (it holds non-secret vars: project ID, region, cluster name, WIF provider, deployer SA, registry path).
+Uses a GitHub **Environment** `dev` (it holds non-secret vars: AWS account ID, region, cluster name, deployer role ARN, ECR registry).
 
-1. Authenticate to GCP via WIF (`id-token: write`).
-2. Build and push both images to Artifact Registry, tagged with the **Git SHA**. Also push a provenance attestation (`docker/build-push-action` with `provenance: true`).
-3. `get-gke-credentials`.
-4. `helm upgrade --install gapless deploy/helm/gapless -f values.yaml -f values-gke.yaml --set image.tag=$GITHUB_SHA --wait --timeout 10m` plus the rollback-on-failure flag. (Helm 4 renamed `--atomic` to `--rollback-on-failure`; confirm with `helm upgrade --help` for the installed version.)
+1. Authenticate to AWS via OIDC (`id-token: write`, `aws-actions/configure-aws-credentials`).
+2. Log in to ECR (`aws-actions/amazon-ecr-login`). Build and push both images, tagged with the **Git SHA**. Also push a provenance attestation (`docker/build-push-action` with `provenance: true`).
+3. `aws eks update-kubeconfig` for the cluster.
+4. `helm upgrade --install gapless deploy/helm/gapless -f values.yaml -f values-eks.yaml --set image.tag=$GITHUB_SHA --wait --timeout 10m` plus the rollback-on-failure flag. (Helm 4 renamed `--atomic` to `--rollback-on-failure`; confirm with `helm upgrade --help` for the installed version.)
    - The migration Job runs as a pre-upgrade hook. If it fails, the release fails and the old pods keep serving.
-5. Smoke test: `curl` the public `/v1/stats` endpoint through the Gateway and assert HTTP 200 and `lagBlocks` present.
+5. Smoke test: `curl` the public `/v1/stats` endpoint through the Gateway (the NLB hostname) and assert HTTP 200 and `lagBlocks` present.
 6. Write the deployed SHA and image digests to the job summary.
 
 ### `infra.yml`: Terraform for `infra/terraform/envs/dev`
 
 - On PRs touching `infra/**`: `terraform plan`, with the plan posted as a PR comment.
 - Apply **only** via `workflow_dispatch` with a required-reviewer protection rule on the `infra` environment. Never auto-apply on merge.
+- The plan role (PR runs) is read-only. The apply role is a separate IAM role, trusted only for the `infra` environment.
+- The environment is short-lived (`adr/0003`): a plan against a destroyed environment shows a full create. That's expected.
 
 ### `renovate`
 

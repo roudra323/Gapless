@@ -10,20 +10,22 @@ flowchart LR
   RPC[(RPC provider<br/>HTTP + WS)]
   T --- RPC
 
-  subgraph K8s["Kubernetes cluster (kind / GKE)"]
-    GW[Gateway API<br/>Gateway + HTTPRoute]
+  subgraph K8s["Kubernetes cluster (kind / EKS)"]
+    GW[Gateway API<br/>Envoy Gateway]
     API[api Deployment<br/>2+ replicas, HPA]
     IDX[indexer Deployment<br/>1 replica, Recreate]
     MIG[migrate Job<br/>Helm pre-upgrade hook]
-    RD[(Redis<br/>in-cluster, cache only)]
     PROM[Prometheus]
+    AM[Alertmanager]
+    ALLOY[Alloy<br/>log collector]
+    LOKI[(Loki)]
     GRAF[Grafana]
   end
 
-  PG[(Postgres<br/>Cloud SQL / local)]
+  PG[(Postgres<br/>RDS / local)]
+  CHAT((Chat webhook))
 
   User((Client)) --> GW --> API
-  API --> RD
   API --> PG
   IDX -- "getLogs (HTTP)" --> RPC
   IDX -. "newHeads (WS) trigger only" .-> RPC
@@ -31,7 +33,10 @@ flowchart LR
   MIG --> PG
   PROM -- scrape /metrics --> API
   PROM -- scrape /metrics --> IDX
+  PROM --> AM --> CHAT
+  ALLOY -- pod logs --> LOKI
   GRAF --> PROM
+  GRAF --> LOKI
 ```
 
 ## Components
@@ -39,14 +44,14 @@ flowchart LR
 | Component                | Responsibility                                                                         | Scaling                                                                                                   |
 | ------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `apps/indexer`           | Ingest `Transfer` logs into Postgres. The **only** writer of chain data.               | Exactly 1 active instance. Enforced by `replicas: 1`, `strategy: Recreate`, and a Postgres advisory lock. |
-| `apps/api`               | Read-only HTTP API with a Redis cache.                                                 | Stateless. HPA from 2 to 5 replicas on CPU.                                                               |
+| `apps/api`               | Read-only HTTP API over Postgres.                                                      | Stateless. HPA from 2 to 5 replicas on CPU.                                                               |
 | `packages/db`            | Drizzle schema, migrations, client factory, migrate entrypoint.                        | —                                                                                                         |
 | `packages/chain`         | viem client, the `Transfer` ABI and decoder, RPC error redaction, and address helpers. | —                                                                                                         |
 | `packages/config`        | Zod env schemas and the `loadConfig()` helper.                                         | —                                                                                                         |
 | `packages/observability` | Metric registry helpers and the pino logger config.                                    | —                                                                                                         |
 | `contracts/`             | Foundry: `MockToken`, the deploy script, the transfer-spam script.                     | —                                                                                                         |
-| `deploy/`                | Helm chart, kind config, monitoring values, dashboards, alert rules.                   | —                                                                                                         |
-| `infra/terraform/`       | GCP infrastructure.                                                                    | —                                                                                                         |
+| `deploy/`                | Helm chart, kind config, monitoring values, dashboards, alert rules, k6 load script.   | —                                                                                                         |
+| `infra/terraform/`       | AWS infrastructure (`adr/0003`).                                                       | —                                                                                                         |
 
 **Rule:** apps depend on packages. Packages never depend on apps, and `packages/*` must not import NestJS (keep them framework-free so they're easy to test).
 
@@ -61,7 +66,7 @@ gapless/
 ├── .editorconfig  .gitignore  .nvmrc  .env.example
 ├── .vscode/                   # shared editor settings: Prettier on save, final newline
 ├── package.json  pnpm-workspace.yaml  tsconfig.base.json
-├── docs/                      # these documents + adr/ (+ runbooks.md, P8)
+├── docs/                      # these documents + adr/ (+ runbooks.md, P8; postmortems/, P10)
 ├── apps/
 │   ├── indexer/
 │   │   ├── src/
@@ -80,7 +85,6 @@ gapless/
 │       │   ├── main.ts  app.module.ts               (P5)
 │       │   ├── transfers/     # controller, service, repository, schemas
 │       │   ├── stats/
-│       │   ├── cache/
 │       │   ├── health/
 │       │   ├── metrics/
 │       │   └── common/        # problem+json filter, cursor codec, pipes
@@ -92,11 +96,12 @@ gapless/
 ├── contracts/                 # Foundry project: src/ script/ test/
 ├── deploy/
 │   ├── helm/gapless/          # app chart: templates/
-│   ├── local/                 # kind config, local postgres/redis manifests
-│   └── monitoring/            # kube-prometheus-stack values, dashboards/*.json
+│   ├── local/                 # kind config, local postgres manifests
+│   ├── monitoring/            # kube-prometheus-stack, Loki and Alloy values, dashboards/*.json
+│   └── load/                  # k6 load script (P8)
 ├── infra/terraform/
-│   ├── bootstrap/             # state bucket (run once)
-│   └── envs/dev/              # the real environment
+│   ├── bootstrap/             # S3 state bucket (run once)
+│   └── envs/dev/              # the real AWS environment (+ envs/aks/, optional P11)
 ├── .github/workflows/
 ├── renovate.json
 ├── docker-compose.yml
@@ -145,13 +150,13 @@ gapless/
 
 Base path `/v1`. JSON responses. All on-chain integers (`value`, `blockNumber`) are **decimal strings**. Addresses are **EIP-55 checksummed** in responses.
 
-| Method & path                          | Query                                                               | Cache                                                                                       |
-| -------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `GET /v1/transfers`                    | `limit` (1–100, default 25), `cursor`                               | Redis, TTL 3s (first page only)                                                             |
-| `GET /v1/addresses/:address/transfers` | `direction` = `in`\|`out`\|`all` (default `all`), `limit`, `cursor` | none                                                                                        |
-| `GET /v1/stats`                        | —                                                                   | Redis, TTL 5s                                                                               |
-| `GET /healthz`                         | —                                                                   | liveness                                                                                    |
-| `GET /readyz`                          | —                                                                   | readiness: DB reachable. If Redis is down, the API serves uncached (degraded, still ready). |
+| Method & path                          | Query                                                               | Notes                   |
+| -------------------------------------- | ------------------------------------------------------------------- | ----------------------- |
+| `GET /v1/transfers`                    | `limit` (1–100, default 25), `cursor`                               | recent feed             |
+| `GET /v1/addresses/:address/transfers` | `direction` = `in`\|`out`\|`all` (default `all`), `limit`, `cursor` |                         |
+| `GET /v1/stats`                        | —                                                                   |                         |
+| `GET /healthz`                         | —                                                                   | liveness                |
+| `GET /readyz`                          | —                                                                   | readiness: DB reachable |
 
 **Pagination:** keyset (cursor) only, never offset. The cursor is a base64url-encoded JSON `{ b: blockNumber, l: logIndex }`. Sort order is `block_number DESC, log_index DESC`. Response shape:
 
@@ -198,7 +203,6 @@ All config is validated at boot by Zod schemas in `packages/config`. An invalid 
 | `DATABASE_URL`        | all     | `postgres://…` (secret)                                               |
 | `METRICS_PORT`        | all     | `9464`                                                                |
 | `PORT`                | api     | `3000`                                                                |
-| `REDIS_URL`           | api     | `redis://redis:6379`                                                  |
 | `CHAIN_ID`            | all     | `84532` (Base Sepolia) / `31337` (anvil)                              |
 | `TOKEN_ADDRESS`       | all     | `0x…`                                                                 |
 | `RPC_HTTP_URL`        | indexer | secret (contains an API key)                                          |

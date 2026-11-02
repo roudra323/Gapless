@@ -1,6 +1,6 @@
 # CLAUDE.md — Gapless
 
-Gapless is a **resilient ERC-20 Transfer indexer + read API**, deployed on **Kubernetes (GKE)** with **Terraform**, **GitHub Actions CI/CD**, and **Prometheus/Grafana** observability.
+Gapless is a **resilient ERC-20 Transfer indexer + read API**, deployed on **Kubernetes (EKS on AWS)** with **Terraform**, **GitHub Actions CI/CD**, and **Prometheus/Grafana** observability.
 
 The app is deliberately small. The engineering quality is the point: correctness under failure, clean infrastructure, real observability. Treat every change as if it were going to production.
 
@@ -32,7 +32,7 @@ The app is deliberately small. The engineering quality is the point: correctness
 7. **Indexer correctness invariants (from `docs/03`) must never be broken:** no gaps, no duplicates, checkpoint advances only in the same DB transaction as the data, a single active writer.
 8. **Secrets never enter the repo**, including `.env` files with real values, RPC URLs with API keys, and service-account keys. Commit `.env.example` only.
 9. **Tests accompany code.** A feature without tests is not done (see `docs/06`).
-10. **Don't run destructive cloud commands** (`terraform apply` or `destroy` against GCP, `helm uninstall` on GKE) unless the user explicitly asks in that message.
+10. **Don't run destructive cloud commands** (`terraform apply` or `destroy` against AWS or Azure, `helm uninstall` on EKS or AKS) unless the user explicitly asks in that message.
 11. **Chat in ASD-STE100.** Write all replies to the user in ASD-STE100 Simplified Technical English. Repo docs and code comments use normal technical English.
 
 ## Commands (target — keep this section accurate)
@@ -48,7 +48,7 @@ pnpm typecheck               # tsc --noEmit across workspace
 pnpm test                    # unit tests (vitest)
 pnpm -r build                # build all packages (topological order)
 # Phase 1
-pnpm dev:deps                # docker compose up: postgres, redis, anvil
+pnpm dev:deps                # docker compose up: postgres, anvil
 # Phase 2
 pnpm db:generate             # drizzle-kit generate (SQL migration files)
 pnpm db:migrate              # apply migrations to DATABASE_URL
@@ -59,13 +59,14 @@ pnpm verify                  # compare DB vs getLogs for a block range (gaps/dup
 # Phase 4
 pnpm test:chaos              # build the indexer, then the chaos tests (testcontainers + anvil)
 # Phase 8
-make kind-up                 # local cluster + gateway + monitoring stack
+make kind-up                 # local cluster + gateway + monitoring stack (Prometheus, Grafana, Alertmanager, Loki, Alloy)
 make kind-deploy             # build images, kind load, helm upgrade (local values)
 make kind-down
 make port-forward            # Grafana and the gateway
+make load                    # k6 load test against the gateway (HPA demo)
 # Phase 9
-make gke-bootstrap           # cluster add-ons via Helm (ESO, kube-prometheus-stack, Gateway)
-make gke-down                # terraform destroy for envs/dev (only when the user asks)
+make eks-bootstrap           # cluster add-ons via Helm (LB controller, Envoy Gateway, ESO, monitoring, Loki, Alloy)
+make eks-down                # remove the gateway (NLB), then terraform destroy for envs/dev (only when the user asks)
 ```
 
 ## Definition of done (every change)

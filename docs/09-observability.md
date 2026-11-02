@@ -28,12 +28,11 @@
 
 ### API metrics
 
-| Metric                                  | Type      | Labels                                                        |
-| --------------------------------------- | --------- | ------------------------------------------------------------- |
-| `gapless_http_requests_total`           | counter   | `method`, `route`, `status_class` (`2xx`/`4xx`/`5xx`)         |
-| `gapless_http_request_duration_seconds` | histogram | `method`, `route`                                             |
-| `gapless_cache_requests_total`          | counter   | `cache` (`stats`/`recent`), `result` = `hit`\|`miss`\|`error` |
-| `gapless_db_query_duration_seconds`     | histogram | `query` (a fixed name, such as `recent_transfers`)            |
+| Metric                                  | Type      | Labels                                                |
+| --------------------------------------- | --------- | ----------------------------------------------------- |
+| `gapless_http_requests_total`           | counter   | `method`, `route`, `status_class` (`2xx`/`4xx`/`5xx`) |
+| `gapless_http_request_duration_seconds` | histogram | `method`, `route`                                     |
+| `gapless_db_query_duration_seconds`     | histogram | `query` (a fixed name, such as `recent_transfers`)    |
 
 ## Alerts (`PrometheusRule`, in the Helm chart)
 
@@ -50,7 +49,7 @@
 
 Each alert has `summary` and `description` annotations and a `runbook_url` pointing to a section in `docs/runbooks.md` (create that in phase 8 with one short section per alert: meaning, first checks, fix).
 
-Alertmanager routing is optional. Showing an alert firing in the Prometheus or Grafana UI is enough for the demo.
+**Alertmanager routing (Phase 8):** route `warning` and `critical` alerts to one chat webhook receiver (Discord or Slack), grouped by `alertname`, with `send_resolved: true` so the channel also shows recovery. `info` alerts (`IndexerWsDown`) stay in the UI only. The webhook URL is a secret: a local Secret on kind, Secrets Manager via ESO on EKS. Never commit it.
 
 ## Grafana dashboard (`deploy/monitoring/dashboards/gapless.json`)
 
@@ -60,21 +59,22 @@ The rows:
 
 1. **Indexer health:** head vs processed (one graph), lag, events/sec, leader status, WS connected, reorgs, batch size.
 2. **RPC:** request rate by method, error ratio, p95 latency.
-3. **API:** RPS by route, p50/p95/p99 latency, 5xx rate, cache hit ratio.
+3. **API:** RPS by route, p50/p95/p99 latency, 5xx rate.
 4. **Platform:** pod CPU/memory vs requests, restarts, HPA replica count.
+5. **Logs:** a Loki panel with the indexer's `warn` and higher lines (`{namespace="$namespace", app_kubernetes_io_component="indexer"} | json | level=~"warn|error|fatal"`; pino writes `level` as a string label), next to the lag graph.
 
 Use a `$namespace` template variable, and use `$__rate_interval` in rate queries.
 
 ## Logs
 
 - pino JSON to stdout, one line per entry. Base fields: `level`, `time` (ISO), `service` (`api`/`indexer`), `version` (Git SHA), `msg`.
-- On GKE, Cloud Logging ingests stdout automatically. Map pino levels to the GCP `severity` field (via a pino `formatters.level`) so severity filtering works.
+- In the cluster, **Grafana Alloy** collects pod stdout and ships it to **Loki** (Phase 8). Labels come from Kubernetes metadata only (namespace, pod, container, `app.kubernetes.io/component`); never turn a log field such as `reqId` or an address into a Loki label (the same cardinality rule as metrics). Query JSON fields with `| json`.
+- The shared logger still adds a GCP Cloud Logging `severity` field (from Phase 3, `GCP_SEVERITY` in `packages/observability`). It has no use on AWS and is removed in Phase 9 (`adr/0003`).
 - The API adds a request-scoped `reqId`, honoring an incoming `x-request-id` header or generating one, and returns it in the response header.
 - Redact: `DATABASE_URL`, `RPC_*`, `authorization` headers.
 - NestJS apps log through nestjs-pino with the shared `loggerOptions` (`packages/observability`) and `wrapSerializers: false`. pino-http otherwise passes an already-serialized error to `errWithCause`, which then drops the inner errors of a cause. An app that logs requests must then set the `req`/`res` serializers itself.
 - NestJS apps boot with `abortOnError: false`, so a boot error reaches the entrypoint, which logs it as `fatal` JSON and exits 1 (Nest's default calls `process.abort()`, with no JSON log and exit code 134).
-- Optional later phase: Loki + Promtail/Alloy in kind for logs in Grafana.
 
 ## Tracing
 
-Out of scope until the optional phase. When added, use the OpenTelemetry SDK with OTLP export. Record the choice of instrumentation (OTel vs `@nestjs/observe`) in an ADR first.
+Out of scope until the optional phase (after Phase 9 works). When added, use the OpenTelemetry SDK with OTLP export. Record the choice of instrumentation (OTel vs `@nestjs/observe`) in an ADR first.

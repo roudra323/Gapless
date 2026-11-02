@@ -1,6 +1,6 @@
 # ADR-0002 — GKE Standard (zonal) + Gateway API
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0003
 - **Date:** 2026-10-21
 
 ## Context

@@ -6,11 +6,12 @@
 | --------------- | ------------------------------------------------------ | -------------------------------------------------- | --------------------------------------------------------------- | ------------------- |
 | Unit            | Vitest                                                 | `*.spec.ts` beside the code                        | `pnpm test`, every PR                                           | 0                   |
 | Contracts       | `forge test`                                           | `contracts/test/`                                  | every PR touching `contracts/`                                  | 1                   |
-| Integration     | Vitest + Testcontainers (Postgres 18, Redis 8) + anvil | `{apps,packages}/*/test/integration/*.int.spec.ts` | `pnpm test:integration`, every PR                               | 2 (DB), 3 (indexer) |
+| Integration     | Vitest + Testcontainers (Postgres 18) + anvil          | `{apps,packages}/*/test/integration/*.int.spec.ts` | `pnpm test:integration`, every PR                               | 2 (DB), 3 (indexer) |
 | Chaos (indexer) | Vitest + anvil + Testcontainers                        | `apps/indexer/test/chaos/*.chaos.spec.ts`          | `pnpm test:chaos`, every PR (keep them fast: under 2 min total) | 4                   |
 | API e2e         | Vitest + supertest against a booted Nest app           | `apps/api/test/e2e/`                               | every PR                                                        | 5                   |
 | Manifests       | `helm lint`, `helm template \| kubeconform -strict`    | `deploy/`                                          | every PR touching `deploy/`                                     | 8                   |
 | Infra           | `terraform fmt -check`, `terraform validate`, `tflint` | `infra/`                                           | every PR touching `infra/`                                      | 9                   |
+| Load (demo)     | k6                                                     | `deploy/load/`                                     | `make load`, by hand against kind or EKS (not in CI)            | 8                   |
 
 ## What must be unit tested
 
@@ -57,7 +58,7 @@ How the chaos tests are built (`apps/indexer/test/chaos/*.chaos.spec.ts`, run wi
 
 - Pagination: walk all pages while new rows are inserted, and confirm there are no repeats or skips for rows that existed at start.
 - Validation errors return problem+json with the right `errorCode` and status.
-- Redis down → the API still serves (uncached) and the cache-error metric increments.
+- DB down → `/readyz` returns 503 and requests fail with a problem+json 503, not a stack trace.
 - Response formatting: decimal strings for `value`/`blockNumber`, checksummed addresses.
 
 ## Rules

@@ -1,6 +1,6 @@
 # Gapless
 
-A resilient ERC-20 `Transfer` indexer and read API: no gaps, no duplicates, survives WebSocket drops, RPC errors, reorgs, and restarts. Runs on Kubernetes (kind locally, GKE in the cloud) with Terraform, GitHub Actions, and Prometheus/Grafana.
+A resilient ERC-20 `Transfer` indexer and read API: no gaps, no duplicates, survives WebSocket drops, RPC errors, reorgs, and restarts. Runs on Kubernetes (kind locally, EKS on AWS in the cloud) with Terraform, GitHub Actions, Prometheus/Grafana, and Loki.
 
 > **Status:** Phase 4 (indexer resilience) done. Next: Phase 5 (API). See [`docs/01-overview-and-roadmap.md`](docs/01-overview-and-roadmap.md).
 

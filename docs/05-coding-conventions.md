@@ -59,7 +59,6 @@ These are rules. If one blocks you, raise it. Don't work around it.
   - Technical errors inside `packages/*` (invalid config, invalid chain data) extend `Error` directly and say in their TSDoc whether they are retryable: `ConfigError`, `InvalidTransferLogError`.
 - The global exception filter maps domain errors to RFC 9457 problem+json with an `errorCode`. Unknown errors become 500 with a generic body. Log the full error server-side and never leak stack traces or SQL.
 - Never swallow errors. A `catch` must either handle the error meaningfully (retry, fallback, translate) or rethrow with `cause`.
-- Redis failures in the API are **non-fatal**: log a `warn`, increment the cache-error metric, and fall through to the DB.
 
 ## Configuration
 
@@ -72,7 +71,7 @@ These are rules. If one blocks you, raise it. Don't work around it.
 - Use the injected pino logger. **No `console.*`** (lint-enforced).
 - Structured fields, not string interpolation: `logger.info({ fromBlock, toBlock, count }, 'batch indexed')`.
 - Required context fields in the indexer: `chainId`, `fromBlock`, `toBlock` (where relevant).
-- Levels: `fatal` (process exiting), `error` (a failed operation needing attention), `warn` (recovered or degraded: reorg, retry exhausted for one attempt, cache down), `info` (lifecycle and batch summaries), `debug` (per-request detail, off in production).
+- Levels: `fatal` (process exiting), `error` (a failed operation needing attention), `warn` (recovered or degraded: reorg, retry exhausted for one attempt), `info` (lifecycle and batch summaries), `debug` (per-request detail, off in production).
 - Don't log per-event lines at `info`. Log one summary line per batch.
 
 ## Async and concurrency
