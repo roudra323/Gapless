@@ -32,7 +32,7 @@ The app is deliberately small. The engineering quality is the point: correctness
 7. **Indexer correctness invariants (from `docs/03`) must never be broken:** no gaps, no duplicates, checkpoint advances only in the same DB transaction as the data, a single active writer.
 8. **Secrets never enter the repo**, including `.env` files with real values, RPC URLs with API keys, and service-account keys. Commit `.env.example` only.
 9. **Tests accompany code.** A feature without tests is not done (see `docs/06`).
-10. **Don't run destructive cloud commands** (`terraform apply` or `destroy` against AWS or Azure, `helm uninstall` on EKS or AKS) unless the user explicitly asks in that message.
+10. **Don't run destructive cloud commands** (`terraform apply` or `destroy` against AWS or Azure, `helm uninstall` on EKS or AKS) unless the user explicitly asks in that message. The local Floci emulator (`make floci-*`) is not a cloud and is exempt.
 11. **Chat in ASD-STE100.** Write all replies to the user in ASD-STE100 Simplified Technical English. Repo docs and code comments use normal technical English.
 
 ## Commands (target — keep this section accurate)
@@ -65,6 +65,10 @@ make kind-down
 make port-forward            # Grafana and the gateway
 make load                    # k6 load test against the gateway (HPA demo)
 # Phase 9
+make floci-up                # start the local Floci AWS emulator (pinned image, localhost:4566)
+make floci-apply             # terraform init (Floci backend) + apply for envs/dev against Floci
+make floci-destroy           # terraform destroy for envs/dev against Floci
+make floci-down              # stop the Floci container
 make eks-bootstrap           # cluster add-ons via Helm (LB controller, Envoy Gateway, ESO, monitoring, Loki, Alloy)
 make eks-down                # remove the gateway (NLB), then terraform destroy for envs/dev (only when the user asks)
 ```

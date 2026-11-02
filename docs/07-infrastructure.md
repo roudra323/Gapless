@@ -73,7 +73,7 @@ Also include `make port-forward` for Grafana and the gateway, and `make load`, w
 
 ## AWS (Terraform: `infra/terraform`)
 
-Decisions and trade-offs: `adr/0003`.
+Decisions and trade-offs: `adr/0003` (AWS) and `adr/0004` (Floci).
 
 ### Layout
 
@@ -99,6 +99,29 @@ Decisions and trade-offs: `adr/0003`.
 | Region          | variable; default `ap-south-1`                                                                                                                                                                                                                       |
 
 Cluster add-ons installed after Terraform via Helm (scripted in `make eks-bootstrap`): AWS Load Balancer Controller, Gateway API CRDs + **Envoy Gateway** and the `Gateway` (its proxy Service is annotated for an internet-facing NLB), External Secrets Operator, kube-prometheus-stack, Loki, and Alloy. Prometheus and Loki use `emptyDir` storage on EKS too, so no EBS CSI driver is needed; their data is lost when a node is replaced, which is accepted for a learning environment.
+
+### Local runs against Floci (Phase 9a)
+
+- `make floci-up` starts the pinned Floci container on `localhost:4566` (with the Docker socket mounted, because Floci starts real containers for EKS and RDS). `make floci-apply` runs `terraform init -reconfigure -backend-config=floci.s3.tfbackend` and `terraform apply` for `envs/dev` against it; `make floci-destroy` destroys it again; `make floci-down` stops the container.
+- `envs/dev/floci.s3.tfbackend` (committed, no secrets) points the S3 backend at a state bucket inside Floci, never at the real state bucket. Dummy credentials only.
+- The provider block switches only its endpoint and its credential and account-ID checks (`var.emulator`). Resources don't branch on the target, except where the coverage table below says a resource is unsupported.
+- Pin the k3s image used for Floci's EKS to the EKS minor version and the RDS image to Postgres 18, if Floci allows the override. Record it below if it doesn't.
+
+#### Floci coverage
+
+Fill this in during the Phase 9a spike (`adr/0004` rule 3). "Checked only on AWS" means a pass on Floci proves nothing about it.
+
+| Resource                            | Works on Floci? | Notes                                              |
+| ----------------------------------- | --------------- | -------------------------------------------------- |
+| VPC, subnets, SGs, internet gateway | to check        |                                                    |
+| ECR                                 | to check        |                                                    |
+| RDS                                 | to check        |                                                    |
+| Secrets Manager                     | to check        |                                                    |
+| Budget                              | to check        |                                                    |
+| EKS + node group                    | to check        |                                                    |
+| EKS access entries, Pod Identity    | to check        | Checked only on AWS (IAM is not enforced on Floci) |
+| GitHub OIDC provider + role         | to check        | The trust from GitHub is checked only on AWS       |
+| NLB from the LB Controller          | n/a             | Not in Terraform; checked only on AWS              |
 
 ### Cost discipline
 

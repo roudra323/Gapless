@@ -103,11 +103,14 @@ Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N 
 
 ### Phase 9 — AWS + deploy pipeline
 
+Two steps (`adr/0004`): **9a** writes and tests the Terraform against the local Floci emulator ($0), with a CI job that applies and destroys it there on every infra PR. **9b** applies the same code to real AWS for the deploy pipeline and the demo, then destroys it.
+
 - Terraform (`adr/0003`): VPC with public node subnets and private DB subnets (no NAT Gateway), EKS with a Spot managed node group, RDS for PostgreSQL, ECR, the GitHub OIDC provider and deployer role, Secrets Manager, IAM roles for pods (ESO, AWS Load Balancer Controller), and a budget alarm (created first).
 - Cluster add-ons via `make eks-bootstrap`: AWS Load Balancer Controller, Envoy Gateway, External Secrets Operator, kube-prometheus-stack, Loki, Alloy.
 - The deploy workflow on `main`.
 - Remove the GCP `severity` field from the shared logger (`packages/observability`) and its test.
-- ✅ Done when a push to `main` deploys to EKS, migrations run as a Helm hook, the public endpoint serves data, and `make eks-down` removes everything (no NLB or VPC left behind).
+- ✅ 9a done when `make floci-apply` and `make floci-destroy` succeed locally and in CI, and the "Floci coverage" table in `docs/07` is filled in.
+- ✅ 9b done when a push to `main` deploys to EKS, migrations run as a Helm hook, the public endpoint serves data, and `make eks-down` removes everything (no NLB or VPC left behind).
 
 ### Phase 10 — Polish
 

@@ -11,6 +11,7 @@
 | API e2e         | Vitest + supertest against a booted Nest app           | `apps/api/test/e2e/`                               | every PR                                                        | 5                   |
 | Manifests       | `helm lint`, `helm template \| kubeconform -strict`    | `deploy/`                                          | every PR touching `deploy/`                                     | 8                   |
 | Infra           | `terraform fmt -check`, `terraform validate`, `tflint` | `infra/`                                           | every PR touching `infra/`                                      | 9                   |
+| Infra (Floci)   | `terraform apply` + `destroy` against Floci            | `infra/terraform/envs/dev`                         | `make floci-apply`, every PR touching `infra/`                  | 9a                  |
 | Load (demo)     | k6                                                     | `deploy/load/`                                     | `make load`, by hand against kind or EKS (not in CI)            | 8                   |
 
 ## What must be unit tested
