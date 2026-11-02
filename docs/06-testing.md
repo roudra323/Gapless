@@ -53,7 +53,7 @@ How the chaos tests are built (`apps/indexer/test/chaos/*.chaos.spec.ts`, run wi
 - **Real signals:** `kill-mid-batch` and `graceful-shutdown` run `dist/main.js` as a child process (`harness/indexer-process.ts`), so SIGKILL and SIGTERM and the exit code are real.
 - **Mid-transaction without timing guesses:** `harness/row-hold.ts` locks the checkpoint row (`SELECT … FOR UPDATE`). The indexer's batch then inserts its rows and blocks on the checkpoint UPDATE in its open transaction (visible in `pg_stat_activity`), and the test acts at exactly that point.
 - **Metrics come in Phase 6.** Until then, where a scenario above says a metric increments (`rpc-flaky`, `reorg`), the test checks the matching `warn` log line instead (`indexing step failed, retrying after backoff`, `reorg detected, rewinding`). Add the metric assertions in Phase 6.
-- One file per scenario group, each with its own containers. The whole suite runs in about 40 s locally.
+- One file per scenario group, each with its own containers. The whole suite (15 tests) runs in about 30–65 s locally.
 
 ## API tests
 

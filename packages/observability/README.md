@@ -1,6 +1,6 @@
 # `packages/observability` — `@gapless/observability`
 
-prom-client registry helpers and pino logger config. Framework-free.
+The pino logger config, and prom-client registry helpers (Phase 6). Framework-free.
 
 - **Built in:** Phase 3 (pino logger config), Phase 6 (metrics)
 - **Read first:** `docs/09-observability.md`

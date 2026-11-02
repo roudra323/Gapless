@@ -11,7 +11,7 @@ One Dockerfile per app (`apps/<app>/Dockerfile`), with the build context at the 
   4. `runtime`: copy `/out` only.
 - **Runtime image:** distroless Node (matching the Node major) or `node:24-slim`. Base images are **pinned by digest** and updated by Renovate.
 - **Non-root:** UID 65532 (distroless `nonroot`) or `node`. The root filesystem must work read-only (write nothing to disk; use `/tmp` via `emptyDir` only if unavoidable).
-- `CMD ["node", "dist/main.js"]` in exec form, so Node receives SIGTERM directly. The indexer image also contains `dist/migrate.js` for the migration Job.
+- `CMD ["node", "dist/main.js"]` in exec form, so Node receives SIGTERM directly. The indexer image also contains the `@gapless/db` migrate entrypoint (`dist/bin/migrate.js`, with its `migrations/` folder) for the migration Job.
 - OCI labels: `org.opencontainers.image.source`, `.revision` (Git SHA), `.created`.
 - A `.dockerignore` excludes `node_modules`, `.git`, `dist`, `.env*`, `infra`, and `deploy`.
 - **Size budget:** each runtime image under 200 MB. Report the size in the PR if it grows.
@@ -20,7 +20,7 @@ One Dockerfile per app (`apps/<app>/Dockerfile`), with the build context at the 
 
 - Default services: `postgres` (18) and `anvil` (the official Foundry image). Both have health checks.
 - Host ports are bound to `127.0.0.1` only: postgres `15432` (non-default, so it doesn't clash with a local install), anvil `8545`. `.env.example` uses these ports.
-- `--profile app` adds `indexer` and `api` built from the Dockerfiles, for a full-stack smoke test.
+- `--profile app` (Phase 7) adds `indexer` and `api` built from the Dockerfiles, for a full-stack smoke test.
 
 ## Kubernetes manifests (Helm chart: `deploy/helm/gapless`)
 

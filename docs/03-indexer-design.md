@@ -21,9 +21,9 @@ So a dropped socket can never cause a gap. There's nothing to "replay", because 
 ### HeadTracker (`head/`)
 
 - Keeps `latestHead: bigint` and exposes `waitForChange(signal)`.
-- **WS source:** viem `watchBlockNumber` with a `webSocket` transport and reconnect enabled. On each head, update `latestHead` and wake the loop.
+- **WS source:** an `eth_subscribe("newHeads")` subscription over a viem `webSocket` transport (`subscribeNewHeads` in `packages/chain`). On each head, update `latestHead` and wake the loop.
 - **Poll source:** every `POLL_INTERVAL_MS`, call `getBlockNumber()` over HTTP. This **always runs**, even when the WebSocket is healthy. It's cheap and guarantees progress.
-- Sets metrics `gapless_indexer_ws_connected` and `gapless_indexer_ws_reconnects_total`. If socket state isn't directly observable, treat the WebSocket as disconnected when no WS head has arrived for more than `3 × expected block time`.
+- Sets metrics `gapless_indexer_ws_connected` and `gapless_indexer_ws_reconnects_total` (Phase 6). If socket state isn't directly observable, treat the WebSocket as disconnected when no WS head has arrived for more than `3 × expected block time`.
 - If `RPC_WS_URL` is unset, it runs poll-only. That's a valid production mode.
 - **Our code owns the reconnect.** `subscribeNewHeads` (`packages/chain`) turns viem's own reconnect off (`reconnect: false`, `retryCount: 0`), and `HeadTracker` subscribes again after `backoffDelay` when the socket dies, forever. viem's default would bypass the retry policy below and give up after 5 attempts.
 - `waitForChange` takes the version seen before planning, so a head that arrives between the plan and the wait still wakes the loop at once.

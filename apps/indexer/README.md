@@ -23,8 +23,6 @@ Exit codes of the indexer: 0 = clean stop on SIGTERM or SIGINT (the open batch c
 
 Health, on `METRICS_PORT` (9464, never public): `GET /healthz` is 200 while the loop's heartbeat is fresh; `GET /readyz` is 200 only on the leader with a reachable DB. A standby is live but not ready.
 
-The app always runs from the `tsc` build. `tsx` and Node's type stripping drop decorator metadata, which NestJS DI needs (`docs/04`).
-
 ## Structure
 
 | File                                  | Purpose                                                                                                                      |

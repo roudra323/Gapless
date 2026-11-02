@@ -48,7 +48,7 @@ flowchart LR
 | `packages/db`            | Drizzle schema, migrations, client factory, migrate entrypoint.                        | —                                                                                                         |
 | `packages/chain`         | viem client, the `Transfer` ABI and decoder, RPC error redaction, and address helpers. | —                                                                                                         |
 | `packages/config`        | Zod env schemas and the `loadConfig()` helper.                                         | —                                                                                                         |
-| `packages/observability` | Metric registry helpers and the pino logger config.                                    | —                                                                                                         |
+| `packages/observability` | The pino logger config, and metric registry helpers (Phase 6).                         | —                                                                                                         |
 | `contracts/`             | Foundry: `MockToken`, the deploy script, the transfer-spam script.                     | —                                                                                                         |
 | `deploy/`                | Helm chart, kind config, monitoring values, dashboards, alert rules, k6 load script.   | —                                                                                                         |
 | `infra/terraform/`       | AWS infrastructure (`adr/0003`).                                                       | —                                                                                                         |
@@ -65,7 +65,9 @@ gapless/
 ├── README.md
 ├── .editorconfig  .gitignore  .nvmrc  .env.example
 ├── .vscode/                   # shared editor settings: Prettier on save, final newline
-├── package.json  pnpm-workspace.yaml  tsconfig.base.json
+├── package.json  pnpm-workspace.yaml  tsconfig.base.json  tsconfig.json
+├── vitest.config.ts  vitest.integration.config.ts  vitest.chaos.config.ts
+├── .oxlintrc.json  .prettierrc.json  .prettierignore  lefthook.yml  commitlint.config.ts
 ├── docs/                      # these documents + adr/ (+ runbooks.md, P8; postmortems/, P10)
 ├── apps/
 │   ├── indexer/
@@ -197,14 +199,13 @@ All config is validated at boot by Zod schemas in `packages/config`. An invalid 
 
 | Var                   | Used by | Example / default                                                     |
 | --------------------- | ------- | --------------------------------------------------------------------- |
-| `NODE_ENV`            | all     | `production`                                                          |
 | `LOG_LEVEL`           | all     | `info`                                                                |
 | `APP_VERSION`         | all     | Git SHA, set by Helm from the image tag; `dev` when unset             |
 | `DATABASE_URL`        | all     | `postgres://…` (secret)                                               |
-| `METRICS_PORT`        | all     | `9464`                                                                |
+| `METRICS_PORT`        | apps    | `9464`                                                                |
 | `PORT`                | api     | `3000`                                                                |
-| `CHAIN_ID`            | all     | `84532` (Base Sepolia) / `31337` (anvil)                              |
-| `TOKEN_ADDRESS`       | all     | `0x…`                                                                 |
+| `CHAIN_ID`            | apps    | `84532` (Base Sepolia) / `31337` (anvil)                              |
+| `TOKEN_ADDRESS`       | apps    | `0x…`                                                                 |
 | `RPC_HTTP_URL`        | indexer | secret (contains an API key)                                          |
 | `RPC_WS_URL`          | indexer | secret, optional (indexer works without it)                           |
 | `START_BLOCK`         | indexer | token deploy block (must be >= 1)                                     |
@@ -212,6 +213,6 @@ All config is validated at boot by Zod schemas in `packages/config`. An invalid 
 | `BATCH_SIZE`          | indexer | `2000` (max blocks per `getLogs`)                                     |
 | `POLL_INTERVAL_MS`    | indexer | `4000`                                                                |
 | `REORG_REWIND_BLOCKS` | indexer | `64`                                                                  |
-| `SHUTDOWN_TIMEOUT_MS` | all     | `20000` (must be less than the pod's `terminationGracePeriodSeconds`) |
+| `SHUTDOWN_TIMEOUT_MS` | apps    | `20000` (must be less than the pod's `terminationGracePeriodSeconds`) |
 
-Keep this table in sync with `packages/config` and `.env.example`.
+"all" = the indexer, the API, and the migrate entrypoint; "apps" = the indexer and the API. Keep this table in sync with `packages/config` and `.env.example`.
