@@ -101,8 +101,22 @@ const optionalWsUrl = z
   .transform((value) => (value === '' ? undefined : value))
   .pipe(z.url({ protocol: /^wss?$/, error: 'must be a ws:// or wss:// URL' }).optional());
 
+/**
+ * Env that both apps (the indexer and the API) need: the database, logging, the chain and token,
+ * and the process settings. docs/02 "Configuration" marks these keys "all" or "apps".
+ */
+const appConfigSchema = migrateConfigSchema.extend(chainConfigSchema.shape).extend({
+  /** Must be less than the pod's `terminationGracePeriodSeconds` (docs/03 "Graceful shutdown"). */
+  SHUTDOWN_TIMEOUT_MS: intAtLeast(100).default(20_000),
+  /**
+   * The internal port for `/healthz` and `/readyz` (and `/metrics` from Phase 6). Never routed by
+   * the Gateway (docs/02 "Ports").
+   */
+  METRICS_PORT: port.default(9464),
+});
+
 /** Env for the indexer (docs/02 "Configuration"). */
-export const indexerConfigSchema = migrateConfigSchema.extend(chainConfigSchema.shape).extend({
+export const indexerConfigSchema = appConfigSchema.extend({
   /** Secret: may contain a provider API key. The logger redacts it (packages/observability). */
   RPC_HTTP_URL: z.url({
     protocol: /^https?$/,
@@ -118,10 +132,14 @@ export const indexerConfigSchema = migrateConfigSchema.extend(chainConfigSchema.
   RPC_WS_URL: optionalWsUrl,
   /** The minimum rewind depth on a reorg (docs/03 "Reorg guard"). */
   REORG_REWIND_BLOCKS: bigintAtLeast(1n).default(64n),
-  /** Must be less than the pod's `terminationGracePeriodSeconds` (docs/03 "Graceful shutdown"). */
-  SHUTDOWN_TIMEOUT_MS: intAtLeast(100).default(20_000),
-  /** The internal port for `/healthz` and `/readyz` (and `/metrics` from Phase 6). */
-  METRICS_PORT: port.default(9464),
 });
 
 export type IndexerConfig = z.infer<typeof indexerConfigSchema>;
+
+/** Env for the API (docs/02 "Configuration"). The API never talks to the RPC. */
+export const apiConfigSchema = appConfigSchema.extend({
+  /** The public HTTP port for `/v1/*` (docs/02 "Ports"). */
+  PORT: port.default(3000),
+});
+
+export type ApiConfig = z.infer<typeof apiConfigSchema>;

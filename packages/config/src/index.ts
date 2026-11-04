@@ -1,6 +1,7 @@
 export { ConfigError, loadConfig } from './load-config.js';
 export type { ConfigIssue } from './load-config.js';
 export {
+  apiConfigSchema,
   chainConfigSchema,
   dbConfigSchema,
   indexerConfigSchema,
@@ -8,6 +9,7 @@ export {
   migrateConfigSchema,
 } from './schemas.js';
 export type {
+  ApiConfig,
   ChainConfig,
   DbConfig,
   IndexerConfig,
