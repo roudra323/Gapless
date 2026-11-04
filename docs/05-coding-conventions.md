@@ -54,8 +54,8 @@ These are rules. If one blocks you, raise it. Don't work around it.
 
 ## Errors
 
-- Domain errors extend one base: `class DomainError extends Error { constructor(readonly code: ErrorCode, message: string, readonly cause?: unknown) }`.
-  - Domain errors are the errors the API maps to problem+json. `DomainError` arrives with the API in Phase 5.
+- Domain errors extend one base: `class DomainError extends Error { constructor(readonly code: ErrorCode, message: string, cause?: unknown) }` (`apps/api/src/common/domain-error.ts`). `cause` goes to `super(message, { cause })`, the standard ES2022 `Error` cause; declaring it again as `readonly cause` conflicts with `noImplicitOverride`.
+  - Domain errors are the errors the API maps to problem+json. The codes are the `ERROR_CODE` object in the same file.
   - Technical errors inside `packages/*` (invalid config, invalid chain data) extend `Error` directly and say in their TSDoc whether they are retryable: `ConfigError`, `InvalidTransferLogError`.
 - The global exception filter maps domain errors to RFC 9457 problem+json with an `errorCode`. Unknown errors become 500 with a generic body. Log the full error server-side and never leak stack traces or SQL.
 - Never swallow errors. A `catch` must either handle the error meaningfully (retry, fallback, translate) or rethrow with `cause`.

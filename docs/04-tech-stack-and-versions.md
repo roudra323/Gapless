@@ -1,6 +1,6 @@
 # 04 — Tech Stack & Version Policy
 
-_Last reviewed: 2026-11-02 (Phase 4). `pnpm outdated -r` showed only oxlint 1.90.0 (a minor, for Renovate), @types/node 26 (stays on 24 with Node 24) and TypeScript 7 (stays on 6, see below). No banned package is in use. Re-review whenever a phase starts._
+_Last reviewed: 2026-11-04 (Phase 5 start). `pnpm outdated -r` showed viem 2.57.14 (a patch, for Renovate), oxlint 1.90.0 (a minor, for Renovate), @types/node 26 (stays on 24 with Node 24) and TypeScript 7 (stays on 6, see below). NestJS 12.3.3 was released on 2026-11-04 and is inside the cool-down; the API pins 12.3.2 to match the indexer. No banned package is in use. Re-review whenever a phase starts._
 
 ## Version policy
 

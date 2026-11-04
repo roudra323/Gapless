@@ -5,4 +5,6 @@ Read-only NestJS HTTP API (`/v1/*`) over Postgres (no cache layer). Stateless; s
 - **Built in:** Phase 5 (API), Phase 6 (metrics)
 - **Read first:** `docs/02-architecture.md` (API contract), `docs/05-coding-conventions.md`
 
-No code yet. This folder is part of the skeleton.
+## Status
+
+Phase 5 in progress: package scaffold, `src/common/domain-error.ts` (`DomainError` and the `ERROR_CODE` list). The endpoints, the problem+json filter, and `main.ts` follow.
