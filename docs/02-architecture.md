@@ -160,7 +160,7 @@ Base path `/v1`. JSON responses. All on-chain integers (`value`, `blockNumber`) 
 | `GET /healthz`                         | —                                                                   | liveness                |
 | `GET /readyz`                          | —                                                                   | readiness: DB reachable |
 
-**Pagination:** keyset (cursor) only, never offset. The cursor is a base64url-encoded JSON `{ b: blockNumber, l: logIndex }`. Sort order is `block_number DESC, log_index DESC`. Response shape:
+**Pagination:** keyset (cursor) only, never offset. The cursor is a base64url-encoded JSON `{ "b": "<blockNumber as a decimal string>", "l": <logIndex> }` (`apps/api/src/common/cursor.ts`). Clients treat it as opaque. Only the exact text the API issued is accepted; anything else (malformed, padded, out of the Postgres `bigint`/`integer` range) is `400 INVALID_CURSOR`. A cursor edited to another valid position is accepted: the data is public and `limit` still bounds the query, so the cursor is not signed. Sort order is `block_number DESC, log_index DESC`. Response shape:
 
 ```json
 {
