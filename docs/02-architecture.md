@@ -181,7 +181,16 @@ Base path `/v1`. JSON responses. All on-chain integers (`value`, `blockNumber`) 
 
 **`/v1/stats`:** `{ chainId, tokenAddress, totalTransfers, lastIndexedBlock, headBlock, lagBlocks, updatedAt }`.
 
-**Errors:** RFC 9457 `application/problem+json` with `type`, `title`, `status`, `detail`, and `errorCode` (for example `INVALID_ADDRESS` or `INVALID_CURSOR`). There's one global exception filter, and stack traces never leave the service.
+**Errors:** RFC 9457 `application/problem+json` with `type`, `title`, `status`, `detail`, and `errorCode`. `type` is `about:blank`, so `title` is the HTTP status phrase. There's one global exception filter (`apps/api/src/common/problem-details.filter.ts`), and stack traces never leave the service: a 5xx is logged in full and answered with a fixed `detail`.
+
+| `errorCode`           | Status | When                                                                     |
+| --------------------- | ------ | ------------------------------------------------------------------------ |
+| `INVALID_REQUEST`     | 400    | A query or path value fails its schema (other 4xx keep their own status) |
+| `INVALID_ADDRESS`     | 400    | `:address` is not a 0x address                                           |
+| `INVALID_CURSOR`      | 400    | The cursor is malformed or was changed                                   |
+| `NOT_FOUND`           | 404    | No route matches                                                         |
+| `SERVICE_UNAVAILABLE` | 503    | The database is unreachable; retry later                                 |
+| `INTERNAL_ERROR`      | 500    | Anything unexpected                                                      |
 
 ## Ports
 

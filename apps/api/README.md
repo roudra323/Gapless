@@ -7,4 +7,4 @@ Read-only NestJS HTTP API (`/v1/*`) over Postgres (no cache layer). Stateless; s
 
 ## Status
 
-Phase 5 in progress: package scaffold, `src/common/domain-error.ts` (`DomainError` and the `ERROR_CODE` list). The endpoints, the problem+json filter, and `main.ts` follow.
+Phase 5 in progress: package scaffold, `src/common/domain-error.ts` (`DomainError` and the `ERROR_CODE` list), `src/common/problem-details.filter.ts` (the global problem+json filter). The endpoints and `main.ts` follow.
