@@ -11,8 +11,13 @@ export const SOURCE_CONDITIONS = ['@gapless/source', 'module', 'node', 'developm
 export default defineConfig({
   ssr: { resolve: { conditions: SOURCE_CONDITIONS } },
   test: {
-    // Integration and chaos tests need Docker; they run with `pnpm test:integration` and
-    // `pnpm test:chaos` (vitest.integration.config.ts, vitest.chaos.config.ts).
-    exclude: [...configDefaults.exclude, '**/*.int.spec.ts', '**/*.chaos.spec.ts'],
+    // Integration, API e2e and chaos tests need Docker; they run with `pnpm test:integration`
+    // and `pnpm test:chaos` (vitest.integration.config.ts, vitest.chaos.config.ts).
+    exclude: [
+      ...configDefaults.exclude,
+      '**/*.int.spec.ts',
+      '**/*.e2e.spec.ts',
+      '**/*.chaos.spec.ts',
+    ],
   },
 });

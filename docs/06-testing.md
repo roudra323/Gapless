@@ -8,7 +8,7 @@
 | Contracts       | `forge test`                                           | `contracts/test/`                                  | every PR touching `contracts/`                                  | 1                   |
 | Integration     | Vitest + Testcontainers (Postgres 18) + anvil          | `{apps,packages}/*/test/integration/*.int.spec.ts` | `pnpm test:integration`, every PR                               | 2 (DB), 3 (indexer) |
 | Chaos (indexer) | Vitest + anvil + Testcontainers                        | `apps/indexer/test/chaos/*.chaos.spec.ts`          | `pnpm test:chaos`, every PR (keep them fast: under 2 min total) | 4                   |
-| API e2e         | Vitest + supertest against a booted Nest app           | `apps/api/test/e2e/`                               | every PR                                                        | 5                   |
+| API e2e         | Vitest + supertest against a booted Nest app           | `apps/api/test/e2e/*.e2e.spec.ts`                  | `pnpm test:integration`, every PR                               | 5                   |
 | Manifests       | `helm lint`, `helm template \| kubeconform -strict`    | `deploy/`                                          | every PR touching `deploy/`                                     | 8                   |
 | Infra           | `terraform fmt -check`, `terraform validate`, `tflint` | `infra/`                                           | every PR touching `infra/`                                      | 9                   |
 | Infra (Floci)   | `terraform apply` + `destroy` against Floci            | `infra/terraform/envs/dev`                         | `make floci-apply`, every PR touching `infra/`                  | 9a                  |
@@ -61,6 +61,15 @@ How the chaos tests are built (`apps/indexer/test/chaos/*.chaos.spec.ts`, run wi
 - Validation errors return problem+json with the right `errorCode` and status.
 - DB down → `/readyz` returns 503 and requests fail with a problem+json 503, not a stack trace.
 - Response formatting: decimal strings for `value`/`blockNumber`, checksummed addresses.
+
+How they are built:
+
+- **Unit** (`apps/api/src/**/*.spec.ts`): pure logic (cursor, schemas, mappers, the filter) and the services with a fake repository. `src/app.module.spec.ts` boots the whole app against a refused `DATABASE_URL` to check the wiring: logs, `reqId`, 503 problem+json, the health server, shutdown.
+- **Integration** (`apps/api/test/integration/`): the repositories against Postgres 18, including `EXPLAIN` checks that every request query uses an index and sorts nothing.
+- **E2E** (`apps/api/test/e2e/`): `harness/api.ts` boots `AppModule` in-process on free ports against a Postgres container (the integration harness), and supertest calls it. They run in `pnpm test:integration`, because they need Docker. nestjs-pino keeps one root logger per test file (module state), so each file boots one app.
+  - `transfers.e2e.spec.ts`: page walks (`/v1/transfers` and each `direction`) while a new block is inserted between pages; a walk returns exactly the rows that existed when it started, in order. Also the response format (a block above `Number.MAX_SAFE_INTEGER`, `2^256 - 1`) and every `errorCode`.
+  - `stats.e2e.spec.ts`: before and after a checkpoint exists.
+  - `database-down.e2e.spec.ts`: stops the container under the running app.
 
 ## Rules
 
