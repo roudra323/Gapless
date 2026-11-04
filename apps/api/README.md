@@ -7,7 +7,21 @@ Read-only NestJS HTTP API (`/v1/*`) over Postgres (no cache layer). Stateless; s
 
 ## Status
 
-Phase 5 in progress: `src/main.ts` (boot, shutdown hooks, listen), `src/app.module.ts` (logger with request IDs, the global problem+json filter, the feature modules), `src/shared.module.ts` (config and the database pool), package scaffold, `src/common/domain-error.ts` (`DomainError` and the `ERROR_CODE` list), `src/common/problem-details.filter.ts` (the global problem+json filter), `src/common/cursor.ts` (the keyset cursor codec), `src/common/validation.ts` (per-parameter schema validation), `src/transfers/` (request schemas, the `Transfer` type, `toTransferResponse`, the keyset repository, the service with `limit + 1` paging, the controller for `GET /v1/transfers` and `GET /v1/addresses/:address/transfers`), `src/stats/` (`GET /v1/stats` from one snapshot), `src/health/` (`/healthz` and `/readyz` on `METRICS_PORT`), `src/common/database-unavailable.ts` (a database outage becomes `503 SERVICE_UNAVAILABLE`). End-to-end tests follow.
+Phase 5 done: `GET /v1/transfers`, `GET /v1/addresses/:address/transfers`, `GET /v1/stats`, `/healthz` and `/readyz` on `METRICS_PORT`, RFC 9457 problem+json errors, and JSON request logs with `reqId`. Metrics come in Phase 6.
+
+## Layout
+
+| Path                   | What                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| `src/main.ts`          | Boot: config, logger, shutdown hooks and timeout, listen                                      |
+| `src/app.module.ts`    | Root module: logger with request IDs, the global problem+json filter, the feature modules     |
+| `src/shared.module.ts` | Global config and the database pool (`src/database/`), closed on shutdown                     |
+| `src/common/`          | `DomainError`, the problem+json filter, the cursor codec, `validated()`, DB outage → 503      |
+| `src/transfers/`       | Request schemas, keyset repository, service (`limit + 1` paging), controller, response mapper |
+| `src/stats/`           | One read-only snapshot for the count and the checkpoint                                       |
+| `src/health/`          | Liveness and readiness (`select 1` within 2 s, 503 once shutdown starts)                      |
+| `test/integration/`    | Repositories against Postgres, with `EXPLAIN` checks                                          |
+| `test/e2e/`            | The whole app against Postgres (run by `pnpm test:integration`)                               |
 
 ## Usage
 

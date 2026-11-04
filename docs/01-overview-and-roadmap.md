@@ -43,7 +43,7 @@ Every phase should move toward making this demo work.
 
 Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N passes.**
 
-**Current status:** **Phase 4 done (2026-11-02).** Next: Phase 5 (API). Update this line when a phase passes.
+**Current status:** **Phase 5 done (2026-11-05).** Next: Phase 6 (observability in code). Update this line when a phase passes.
 
 ### Phase 0 — Repo foundation
 
