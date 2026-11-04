@@ -153,13 +153,13 @@ gapless/
 
 Base path `/v1`. JSON responses. All on-chain integers (`value`, `blockNumber`) are **decimal strings**. Addresses are **EIP-55 checksummed** in responses.
 
-| Method & path                          | Query                                                               | Notes                   |
-| -------------------------------------- | ------------------------------------------------------------------- | ----------------------- |
-| `GET /v1/transfers`                    | `limit` (1–100, default 25), `cursor`                               | recent feed             |
-| `GET /v1/addresses/:address/transfers` | `direction` = `in`\|`out`\|`all` (default `all`), `limit`, `cursor` |                         |
-| `GET /v1/stats`                        | —                                                                   |                         |
-| `GET /healthz`                         | —                                                                   | liveness                |
-| `GET /readyz`                          | —                                                                   | readiness: DB reachable |
+| Method & path                          | Query                                                               | Notes                                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/transfers`                    | `limit` (1–100, default 25), `cursor`                               | recent feed                                                                                                           |
+| `GET /v1/addresses/:address/transfers` | `direction` = `in`\|`out`\|`all` (default `all`), `limit`, `cursor` |                                                                                                                       |
+| `GET /v1/stats`                        | —                                                                   |                                                                                                                       |
+| `GET /healthz`                         | —                                                                   | liveness, on `METRICS_PORT` (9464): 200 while the process runs; never depends on the DB                               |
+| `GET /readyz`                          | —                                                                   | readiness, on `METRICS_PORT`: 200 when `select 1` answers within 2 s; 503 when the DB is down or once shutdown starts |
 
 **Pagination:** keyset (cursor) only, never offset. The cursor is a base64url-encoded JSON `{ "b": "<blockNumber as a decimal string>", "l": <logIndex> }` (`apps/api/src/common/cursor.ts`). Clients treat it as opaque. Only the exact text the API issued is accepted; anything else (malformed, padded, out of the Postgres `bigint`/`integer` range) is `400 INVALID_CURSOR`. A cursor edited to another valid position is accepted: the data is public and `limit` still bounds the query, so the cursor is not signed. Sort order is `block_number DESC, log_index DESC`. Response shape: Every query filters by `chain_id` and `token_address` and uses the row comparison `(block_number, log_index) < (b, l)`, which Postgres applies inside the index scan (`Index Cond`), so a page reads about `limit` index entries. `direction=all` runs the `out` and `in` queries (each on its own index; the `in` side skips self-transfers) and merges them, because `from = a OR to = a` makes Postgres walk the whole recent index for a rare address. The plans are checked with `EXPLAIN` in `apps/api/test/integration/transfers.repository.int.spec.ts`.
 
