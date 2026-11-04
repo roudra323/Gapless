@@ -58,6 +58,8 @@ pnpm indexer:start           # build the indexer and its packages, then run it (
 pnpm verify                  # compare DB vs getLogs for a block range (gaps/duplicates)
 # Phase 4
 pnpm test:chaos              # build the indexer, then the chaos tests (testcontainers + anvil)
+# Phase 5
+pnpm api:start               # build the API and its packages, then run it (reads .env)
 # Phase 8
 make kind-up                 # local cluster + gateway + monitoring stack (Prometheus, Grafana, Alertmanager, Loki, Alloy)
 make kind-deploy             # build images, kind load, helm upgrade (local values)

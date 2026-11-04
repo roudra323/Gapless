@@ -84,12 +84,13 @@ gapless/
 │   │       └── chaos/         # *.chaos.spec.ts (pnpm test:chaos)
 │   └── api/
 │       ├── src/
-│       │   ├── main.ts  app.module.ts               (P5)
-│       │   ├── transfers/     # controller, service, repository, schemas
-│       │   ├── stats/
-│       │   ├── health/
-│       │   ├── metrics/
-│       │   └── common/        # problem+json filter, cursor codec, pipes
+│       │   ├── main.ts  app.module.ts  shared.module.ts  lifecycle.service.ts  config.provider.ts  request-id.ts
+│       │   ├── transfers/     # controller, service, repository, schemas, response mapper
+│       │   ├── stats/         # controller, service, repository, response mapper
+│       │   ├── health/        # /healthz /readyz on METRICS_PORT
+│       │   ├── database/      # pool provider and its shutdown
+│       │   ├── metrics/       # API metric definitions (P6)
+│       │   └── common/        # DomainError, problem+json filter, cursor codec, validation, DB outage mapping
 │       └── test/
 │           ├── integration/
 │           └── e2e/
