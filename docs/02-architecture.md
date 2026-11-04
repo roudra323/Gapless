@@ -169,7 +169,7 @@ Base path `/v1`. JSON responses. All on-chain integers (`value`, `blockNumber`) 
       "txHash": "0x…",
       "logIndex": 3,
       "blockNumber": "1234",
-      "blockTimestamp": "2026-10-21T10:00:00Z",
+      "blockTimestamp": "2026-10-21T10:00:00.000Z",
       "from": "0xAbC…",
       "to": "0xDeF…",
       "value": "1000000000000000000"

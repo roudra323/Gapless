@@ -47,7 +47,7 @@ These are rules. If one blocks you, raise it. Don't work around it.
   - Controllers handle HTTP only: parse/validate input, call the service, map to the response DTO. No business logic, no DB.
   - Services hold the business logic. They don't know about HTTP (no `Request`, no `HttpException`). They throw **domain errors**.
   - Repositories are the only place Drizzle is used. They return domain types, not raw rows.
-- **Validation:** Zod schemas next to the feature (`transfers.schemas.ts`), passed via Nest 12's Standard Schema support on `@Query({ schema })` / `@Param({ schema })`. Infer TS types from schemas (`z.infer`) and don't duplicate them by hand.
+- **Validation:** Zod schemas next to the feature (`transfers.schemas.ts`), passed via Nest 12's Standard Schema support on `@Query(...)` / `@Param(...)` with the `validated(schema, errorCode)` helper (`apps/api/src/common/validation.ts`). It adds a `StandardSchemaValidationPipe` to that one parameter, so each parameter fails with its own `errorCode` (`INVALID_ADDRESS` for `:address`, `INVALID_REQUEST` for the query). There is no global validation pipe. Infer TS types from schemas (`z.infer`) and don't duplicate them by hand.
 - **Response DTOs** are plain functions (`toTransferResponse(row)`) that are explicit about the output shape. Never return DB rows directly.
 - Providers are injected via the constructor. No service locators, no `ModuleRef.get` in business code.
 - Global setup in `main.ts`: `enableShutdownHooks()`, the problem+json exception filter, and the pino logger.
