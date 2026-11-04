@@ -21,6 +21,12 @@ export type CreateDbOptions = {
   readonly maxConnections?: number;
   /** Shown in `pg_stat_activity.application_name`, so you can see which process holds a connection. */
   readonly applicationName?: string;
+  /**
+   * How long a query waits for a connection (a new one or a free one from the pool) before it
+   * fails. The `pg` default is 0, which waits forever: with an unreachable host, a request would
+   * hang. Unset keeps that default (the indexer retries on its own).
+   */
+  readonly connectionTimeoutMillis?: number;
 };
 
 export type DbHandle = {
@@ -40,6 +46,7 @@ export function createDb(options: CreateDbOptions): DbHandle {
     connectionString: options.url,
     max: options.maxConnections ?? 10,
     application_name: options.applicationName,
+    connectionTimeoutMillis: options.connectionTimeoutMillis ?? 0,
     // TCP keepalive, so a peer that vanished without closing the socket is noticed. The
     // indexer holds one connection for its whole life (the advisory lock, docs/03 "Leader").
     keepAlive: true,
