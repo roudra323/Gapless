@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+/** The two checks a process gives to {@link HealthServer}. */
 export type HealthChecks = {
   /** Liveness (`/healthz`): synchronous, so a busy database can't make it fail. */
   readonly live: () => boolean;
@@ -10,7 +11,8 @@ export type HealthChecks = {
 
 /**
  * The internal health endpoints on `METRICS_PORT` (docs/02 "Ports", docs/03 "Health"), on
- * `node:http` with no framework. Phase 6 adds `GET /metrics` to the same server.
+ * `node:http` with no framework. The indexer and the API both use it, so their probes behave the
+ * same. Phase 6 adds `GET /metrics` to the same server.
  *
  * The bodies are fixed (`{"status":"ok"}` or `{"status":"unavailable"}`): an error text could
  * hold a secret, and a probe only reads the status code.
@@ -24,7 +26,11 @@ export class HealthServer {
     });
   }
 
-  /** Starts listening. Returns the bound port (useful with port 0). */
+  /**
+   * Starts listening. Returns the bound port (useful with port 0).
+   *
+   * @throws the `listen` error, for example `EADDRINUSE` when the port is taken.
+   */
   async listen(port: number, host = '0.0.0.0'): Promise<number> {
     await new Promise<void>((resolve, reject) => {
       this.server.once('error', reject);
@@ -36,6 +42,7 @@ export class HealthServer {
     return (this.server.address() as AddressInfo).port;
   }
 
+  /** Stops listening and closes open connections. Safe to call when not listening. */
   async close(): Promise<void> {
     if (!this.server.listening) return;
     // Probes are short requests. Don't let a kept-alive socket hold the shutdown.

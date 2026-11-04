@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import type { IndexerConfig } from '@gapless/config';
 import type { DbHandle } from '@gapless/db';
+import { HealthServer } from '@gapless/observability';
 import {
   Inject,
   Injectable,
@@ -13,7 +14,6 @@ import { PinoLogger } from 'nestjs-pino';
 import { INDEXER_CONFIG } from '../config.provider.js';
 import { DB_HANDLE } from '../ingestion/ingestion.providers.js';
 import { LeaderStatus } from '../leader/leader-status.js';
-import { HealthServer } from './health-server.js';
 import { isLive, isReady } from './health-status.js';
 import { Heartbeat } from './heartbeat.js';
 

@@ -38,10 +38,9 @@ Health, on `METRICS_PORT` (9464, never public): `GET /healthz` is 200 while the 
 | `src/leader/leader-lock.ts`           | `pg_try_advisory_lock` on one dedicated connection; the session's Drizzle instance carries every write.                      |
 | `src/leader/lock-key.ts`              | The 64-bit lock key for a chain and token.                                                                                   |
 | `src/leader/leader-status.ts`         | Whether this process leads now (read by `/readyz`).                                                                          |
-| `src/health/health-server.ts`         | `node:http` server for `/healthz` and `/readyz`.                                                                             |
 | `src/health/health-status.ts`         | The liveness window and the readiness rule.                                                                                  |
 | `src/health/heartbeat.ts`             | The heartbeat the loop and the supervisor beat.                                                                              |
-| `src/health/health.service.ts`        | Starts and stops the health server with the app.                                                                             |
+| `src/health/health.service.ts`        | Starts and stops the health server (`HealthServer` from `@gapless/observability`) with the app.                              |
 | `src/ingestion/ingestion.service.ts`  | Builds the head tracker, the lock, the supervisor and the loop, and stops them on shutdown.                                  |
 | `src/ingestion/indexer-supervisor.ts` | Runs one loop per leadership term; waits as a standby; gives up the lock when its connection fails.                          |
 | `src/ingestion/ingestion-loop.ts`     | One term of ingestion: startup checks, planning, fetch, commit, backoff, reorg rewind.                                       |

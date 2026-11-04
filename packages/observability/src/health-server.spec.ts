@@ -50,7 +50,8 @@ describe('HealthServer', () => {
   });
 
   it('keeps liveness apart from readiness', async () => {
-    // Not leader (a standby) is still live: it must not be restarted.
+    // For example, an indexer standby (not the leader) is live but not ready: it must not be
+    // restarted.
     const base = await start({ live: () => true, ready: () => Promise.resolve(false) });
     expect((await fetch(`${base}/healthz`)).status).toBe(200);
     expect((await fetch(`${base}/readyz`)).status).toBe(503);
