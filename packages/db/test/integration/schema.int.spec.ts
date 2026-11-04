@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { sql } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
@@ -7,6 +10,7 @@ import {
   createDb,
   type DbHandle,
   indexerCheckpoints,
+  MIGRATIONS_FOLDER,
   type NewTransferRow,
   runMigrations,
   transfers,
@@ -17,6 +21,13 @@ const POSTGRES_IMAGE =
   'postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873';
 
 const MAX_UINT256 = 2n ** 256n - 1n;
+
+/** Every committed migration, from drizzle-kit's journal. A new migration needs no test change. */
+const MIGRATION_COUNT = (
+  JSON.parse(readFileSync(join(MIGRATIONS_FOLDER, 'meta/_journal.json'), 'utf8')) as {
+    entries: unknown[];
+  }
+).entries.length;
 const TOKEN = `0x${'a'.repeat(40)}`;
 
 // Postgres SQLSTATE codes.
@@ -86,14 +97,14 @@ describe('migrations', () => {
     expect(rows.map((row) => row.table_name)).toEqual(['indexer_checkpoints', 'transfers']);
 
     const applied = await handle.pool.query('SELECT id FROM drizzle.__drizzle_migrations');
-    expect(applied.rows).toHaveLength(1);
+    expect(applied.rows).toHaveLength(MIGRATION_COUNT);
   });
 
   it('are idempotent: a second run applies nothing', async () => {
     await runMigrations(handle.db);
 
     const { rows } = await handle.pool.query('SELECT id FROM drizzle.__drizzle_migrations');
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(MIGRATION_COUNT);
   });
 });
 

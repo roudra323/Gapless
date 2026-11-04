@@ -56,6 +56,9 @@ export const transfers = pgTable(
       t.blockNumber.desc().nullsFirst(),
       t.logIndex.desc().nullsFirst(),
     ),
+    // For the API's `count(*)` per chain and token (`/v1/stats`): an index-only scan of this small
+    // index instead of a full table scan (docs/05 "Database"). Added in Phase 5.
+    index('transfers_token_idx').on(t.chainId, t.tokenAddress),
     check('transfers_block_hash_format', sql`${t.blockHash} ~ ${HASH_PATTERN}`),
     check('transfers_tx_hash_format', sql`${t.txHash} ~ ${HASH_PATTERN}`),
     check('transfers_token_address_format', sql`${t.tokenAddress} ~ ${ADDRESS_PATTERN}`),

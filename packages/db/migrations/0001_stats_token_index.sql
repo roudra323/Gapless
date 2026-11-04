@@ -1,0 +1,1 @@
+CREATE INDEX "transfers_token_idx" ON "transfers" USING btree ("chain_id","token_address");

@@ -133,6 +133,7 @@ gapless/
   - `(chain_id, block_number DESC, log_index DESC)` for the recent feed
   - `(chain_id, from_address, block_number DESC, log_index DESC)`
   - `(chain_id, to_address, block_number DESC, log_index DESC)`
+  - `(chain_id, token_address)` for the `/v1/stats` count (an index-only scan; migration `0001`, Phase 5)
 - **Check constraints:** address and hash columns match `^0x[0-9a-f]{40}$` and `^0x[0-9a-f]{64}$`.
 
 ### `indexer_checkpoints`
@@ -179,7 +180,7 @@ Base path `/v1`. JSON responses. All on-chain integers (`value`, `blockNumber`) 
 }
 ```
 
-**`/v1/stats`:** `{ chainId, tokenAddress, totalTransfers, lastIndexedBlock, headBlock, lagBlocks, updatedAt }`.
+**`/v1/stats`:** `{ chainId, tokenAddress, totalTransfers, lastIndexedBlock, headBlock, lagBlocks, updatedAt }`. `tokenAddress` is checksummed; `totalTransfers`, `lastIndexedBlock`, `headBlock` and `lagBlocks` are decimal strings; `updatedAt` is when the indexer last wrote its checkpoint. Before the indexer's first start, the four checkpoint fields are `null` and `totalTransfers` is `"0"`. `lagBlocks` is `headBlock - lastIndexedBlock`, never below 0. The count and the checkpoint come from one read-only `REPEATABLE READ` snapshot, so they always match. `totalTransfers` is a `count(*)`: an index-only scan that grows with the table (the indexer is frozen, so no counter column is kept).
 
 **Errors:** RFC 9457 `application/problem+json` with `type`, `title`, `status`, `detail`, and `errorCode`. `type` is `about:blank`, so `title` is the HTTP status phrase. There's one global exception filter (`apps/api/src/common/problem-details.filter.ts`), and stack traces never leave the service: a 5xx is logged in full and answered with a fixed `detail`.
 
