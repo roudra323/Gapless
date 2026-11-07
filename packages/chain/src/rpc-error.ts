@@ -121,6 +121,8 @@ export type RpcErrorClass =
 /** JSON-RPC "limit exceeded" (EIP-1474). Infura also uses it for rate limits, see below. */
 const LIMIT_EXCEEDED_CODE = -32005;
 const PAYLOAD_TOO_LARGE_STATUS = 413;
+/** HTTP 429. Some providers also use it as the JSON-RPC error code. */
+const TOO_MANY_REQUESTS = 429;
 
 /**
  * Provider messages for a `getLogs` range that is too large. Each provider words it differently:
@@ -171,6 +173,24 @@ export function classifyRpcError(err: unknown): RpcErrorClass {
     if (RANGE_REJECTED_TEXT.test(text)) return 'range-rejected';
   }
   return 'transient';
+}
+
+/**
+ * True when the provider refused a call because of a rate limit: HTTP 429 (or a JSON-RPC error
+ * with code 429), or a JSON-RPC -32005 whose text names a rate limit, anywhere in the `cause`
+ * chain. Only the `result` label of `gapless_rpc_requests_total` uses it (docs/09); the retry
+ * policy treats a rate limit as any other transient error (`classifyRpcError`).
+ *
+ * Call it on the original error, not on the copy from `redactRpcUrl`.
+ */
+export function isRateLimited(err: unknown): boolean {
+  for (const link of causeChain(err)) {
+    const { message, details, code, status } = link as ErrorFields;
+    if (status === TOO_MANY_REQUESTS || code === TOO_MANY_REQUESTS) return true;
+    const text = [message, details].filter((part) => typeof part === 'string').join('\n');
+    if (code === LIMIT_EXCEEDED_CODE && RATE_LIMIT_TEXT.test(text)) return true;
+  }
+  return false;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { createPublicClient, hexToBigInt, type Hex, webSocket } from 'viem';
 
 import { DEFAULT_RPC_TIMEOUT_MS } from './rpc-client.js';
+import { observeRpcCall, type RpcCallObserver } from './rpc-observer.js';
 
 export type NewHeadsOptions = {
   /** The JSON-RPC WebSocket URL. Secret: it may contain a provider API key (see `redactRpcUrl`). */
@@ -13,6 +14,8 @@ export type NewHeadsOptions = {
    */
   readonly onError: (err: unknown) => void;
   readonly timeoutMs?: number;
+  /** Gets the `eth_subscribe` call, for the RPC metrics (docs/09). */
+  readonly onCall?: RpcCallObserver;
 };
 
 export type NewHeadsSubscription = {
@@ -35,6 +38,7 @@ export async function subscribeNewHeads({
   onHead,
   onError,
   timeoutMs = DEFAULT_RPC_TIMEOUT_MS,
+  onCall,
 }: NewHeadsOptions): Promise<NewHeadsSubscription> {
   const client = createPublicClient({
     transport: webSocket(url, { reconnect: false, retryCount: 0, timeout: timeoutMs }),
@@ -57,20 +61,22 @@ export async function subscribeNewHeads({
   };
 
   try {
-    await transport.subscribe({
-      params: ['newHeads'],
-      onData: (data: { result?: { number?: Hex } }) => {
-        const number = data.result?.number;
-        if (!closed && number !== undefined) onHead(hexToBigInt(number));
-      },
-      onError: (err: unknown) => {
-        // Before `ready`, the same error rejects `subscribe` below, so it is not reported twice.
-        // A failing socket reports both an error and a close: tell the caller once.
-        if (!ready || closed || reported) return;
-        reported = true;
-        onError(err);
-      },
-    });
+    await observeRpcCall(onCall, 'eth_subscribe', 'ws', () =>
+      transport.subscribe({
+        params: ['newHeads'],
+        onData: (data: { result?: { number?: Hex } }) => {
+          const number = data.result?.number;
+          if (!closed && number !== undefined) onHead(hexToBigInt(number));
+        },
+        onError: (err: unknown) => {
+          // Before `ready`, the same error rejects `subscribe` below, so it is not reported twice.
+          // A failing socket reports both an error and a close: tell the caller once.
+          if (!ready || closed || reported) return;
+          reported = true;
+          onError(err);
+        },
+      }),
+    );
   } catch (err) {
     await close();
     throw err;

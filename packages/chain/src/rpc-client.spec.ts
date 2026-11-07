@@ -5,7 +5,8 @@ import { HttpRequestError, TimeoutError } from 'viem';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createRpcClient } from './rpc-client.js';
-import { classifyRpcError, redactRpcUrl } from './rpc-error.js';
+import { classifyRpcError, isRateLimited, redactRpcUrl } from './rpc-error.js';
+import type { RpcCall } from './rpc-observer.js';
 
 type JsonRpcRequest = { id: number; method: string; params?: unknown[] };
 type Handler = (body: JsonRpcRequest | JsonRpcRequest[], res: ServerResponse) => void;
@@ -246,5 +247,91 @@ describe('classifyRpcError with real viem errors', () => {
     const { origin } = await startServer(respondWith(() => '0x1'));
     for (const server of servers.splice(0)) await new Promise((resolve) => server.close(resolve));
     expect(classifyRpcError(await getLogsError(origin))).toBe('transient');
+  });
+});
+
+describe('createRpcClient onCall', () => {
+  it('reports each call of a batch once, with its method', async () => {
+    const { posts, origin } = await startServer(respondWith(() => '0x1'));
+    const calls: RpcCall[] = [];
+    const client = createRpcClient({ url: origin, onCall: (call) => calls.push(call) });
+
+    await Promise.all([
+      client.request({ method: 'eth_getBlockByNumber', params: ['0x9', false] }),
+      client.request({ method: 'eth_getBlockByNumber', params: ['0x10', false] }),
+      client.request({ method: 'eth_getLogs', params: [{ fromBlock: '0xa', toBlock: '0x10' }] }),
+    ]);
+
+    expect(posts).toHaveLength(1);
+    expect(calls.map((call) => call.method).toSorted()).toEqual([
+      'eth_getBlockByNumber',
+      'eth_getBlockByNumber',
+      'eth_getLogs',
+    ]);
+    for (const call of calls) {
+      expect(call).toMatchObject({ transport: 'http', result: 'ok' });
+      expect(call.durationSeconds).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it.each([
+    [500, 'error'],
+    [503, 'error'],
+    [429, 'rate_limited'],
+  ])('reports HTTP %i as %s and still rejects', async (status, result) => {
+    const { origin } = await startServer((_body, res) => {
+      res.statusCode = status;
+      res.end('busy');
+    });
+    const calls: RpcCall[] = [];
+    const client = createRpcClient({ url: origin, onCall: (call) => calls.push(call) });
+
+    await expect(client.getBlockNumber()).rejects.toBeInstanceOf(HttpRequestError);
+    expect(calls).toEqual([
+      expect.objectContaining({ method: 'eth_blockNumber', transport: 'http', result }),
+    ]);
+  });
+
+  it('reports a rate-limit JSON-RPC error as rate_limited', async () => {
+    const { origin } = await startServer(
+      respondWithError(-32005, 'daily request count exceeded, request rate limited'),
+    );
+    const calls: RpcCall[] = [];
+    const client = createRpcClient({ url: origin, onCall: (call) => calls.push(call) });
+
+    await expect(client.request({ method: 'eth_chainId' })).rejects.toThrow();
+    expect(calls.map((call) => call.result)).toEqual(['rate_limited']);
+  });
+});
+
+describe('isRateLimited with real viem errors', () => {
+  it('is true for HTTP 429', async () => {
+    const { origin } = await startServer((_body, res) => {
+      res.statusCode = 429;
+      res.end('slow down');
+    });
+    expect(isRateLimited(await getLogsError(origin))).toBe(true);
+  });
+
+  it.each([
+    [-32005, 'daily request count exceeded, request rate limited', true],
+    [429, 'too many requests', true],
+    [-32005, 'query returned more than 10000 results', false],
+    [-32603, 'internal error', false],
+  ])('JSON-RPC error %i "%s" → %s', async (code, message, expected) => {
+    const { origin } = await startServer(respondWithError(code, message));
+    expect(isRateLimited(await getLogsError(origin))).toBe(expected);
+  });
+
+  it('is false for HTTP 500 and a timeout', async () => {
+    const { origin } = await startServer((_body, res) => {
+      res.statusCode = 500;
+      res.end('internal');
+    });
+    expect(isRateLimited(await getLogsError(origin))).toBe(false);
+    const { origin: silent } = await startServer(() => {
+      // Never respond.
+    });
+    expect(isRateLimited(await getLogsError(silent, 50))).toBe(false);
   });
 });
