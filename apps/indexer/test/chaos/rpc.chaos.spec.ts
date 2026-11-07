@@ -77,8 +77,16 @@ describe('rpc chaos', () => {
     // About 30% of the first 200 requests (or of all of them, in a shorter run).
     const exposed = Math.min(proxy.stats.requests, 200);
     expect(proxy.stats.faults).toBeGreaterThan(exposed * 0.15);
+    // The metrics show the faults and the retries (docs/06 "rpc-flaky").
+    const metrics = await indexer.metrics();
+    expect(metrics.sum('gapless_rpc_requests_total', { result: 'error' })).toBeGreaterThan(0);
+    expect(metrics.sum('gapless_rpc_requests_total', { result: 'rate_limited' })).toBeGreaterThan(
+      0,
+    );
+    expect(metrics.get('gapless_indexer_batches_total{result="error"}')).toBeGreaterThan(0);
+    expect(metrics.get('gapless_indexer_batches_total{result="ok"}')).toBeGreaterThan(0);
+    // The retries use backoff: some step failed more than once in a row.
     const retries = messages('indexing step failed, retrying after backoff');
-    expect(retries.length).toBeGreaterThan(0);
     expect(Math.max(...retries.map((line) => Number(line.attempt)))).toBeGreaterThan(0);
     await exactParity();
   });

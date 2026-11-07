@@ -49,19 +49,26 @@ async function reorgScenario(options: {
   expect(oldKeys.size).toBe(options.oldTransfers);
 
   // The reorg: drop the fork and mine a different, longer one from the same parent.
-  const reorgsBefore = reorgLines().length;
+  const reorgs = async () => (await indexer.metrics()).get('gapless_indexer_reorgs_total') ?? 0;
+  expect(await reorgs()).toBe(0);
   await world.token.revert(snapshot);
   let newTip = await world.token.sendTransfers(options.newTransfers, { perBlockMax: 2, random });
   if (newTip <= oldTip) newTip = await world.token.mine(Number(oldTip - newTip) + 1);
 
-  await waitFor(() => reorgLines().length > reorgsBefore, {
+  await waitFor(async () => (await reorgs()) >= 1, {
     timeoutMs: 30_000,
-    description: 'the reorg is detected',
+    description: 'gapless_indexer_reorgs_total increments',
   });
   await world.waitForCheckpoint(newTip);
+  const metrics = await indexer.metrics();
   await indexer.stop();
+  // A reorg found mid-batch is a failed batch; the checkpoint gauge follows the rewind and the
+  // new fork.
+  expect(metrics.get('gapless_indexer_batches_total{result="error"}')).toBeGreaterThan(0);
+  expect(metrics.get('gapless_indexer_processed_block')).toBeGreaterThanOrEqual(Number(newTip));
 
   const stored = new Set((await world.repository.transferKeys(forkPoint + 1n, newTip)).map(keyOf));
+  // The rewind target is only in the log line (no metric has it).
   return { oldKeys, stored, forkPoint, oldTip, reorg: reorgLines().at(-1) };
 }
 

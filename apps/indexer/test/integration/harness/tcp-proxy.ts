@@ -8,6 +8,12 @@ export type TcpProxy = {
   /** New connections are destroyed at once until `resume`. Open ones are not touched. */
   readonly pause: () => void;
   readonly resume: () => void;
+  /**
+   * Open connections stay open, but bytes from the target no longer reach the client (they are
+   * dropped), until `unsilence`. A socket that is up but delivers nothing: the WS stall case.
+   */
+  readonly silence: () => void;
+  readonly unsilence: () => void;
   /** Connections accepted so far (including refused ones while paused). */
   readonly connections: () => number;
   readonly close: () => Promise<void>;
@@ -21,6 +27,7 @@ export async function startTcpProxy(targetUrl: string): Promise<TcpProxy> {
   const target = new URL(targetUrl);
   const open = new Set<Socket>();
   let paused = false;
+  let silenced = false;
   let accepted = 0;
 
   const server: Server = createServer((client) => {
@@ -41,7 +48,9 @@ export async function startTcpProxy(targetUrl: string): Promise<TcpProxy> {
     client.on('error', end).on('close', end);
     upstream.on('error', end).on('close', end);
     client.pipe(upstream);
-    upstream.pipe(client);
+    upstream.on('data', (chunk: Buffer) => {
+      if (!silenced) client.write(chunk);
+    });
   });
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -59,6 +68,12 @@ export async function startTcpProxy(targetUrl: string): Promise<TcpProxy> {
     },
     resume: () => {
       paused = false;
+    },
+    silence: () => {
+      silenced = true;
+    },
+    unsilence: () => {
+      silenced = false;
     },
     connections: () => accepted,
     close: async () => {

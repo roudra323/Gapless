@@ -14,6 +14,7 @@ import { IndexerRepository } from '../../../src/ingestion/indexer.repository.js'
 import { IngestionService } from '../../../src/ingestion/ingestion.service.js';
 import { type ParityReport, verifyRange } from '../../../src/verify/verify-range.js';
 import { ANVIL_CHAIN_ID, startAnvil, type TestAnvil } from './anvil.js';
+import { type Scrape, scrape } from './metrics.js';
 import { startPostgres, type TestPostgres } from './postgres.js';
 import { deployMockToken, type TestToken } from './token.js';
 import { waitFor } from './wait-for.js';
@@ -130,6 +131,8 @@ export type InProcessIndexer = {
   readonly done: Promise<void>;
   /** The health server's base URL. */
   readonly healthUrl: string;
+  /** One scrape of this indexer's `/metrics`. */
+  readonly metrics: () => Promise<Scrape>;
   readonly stop: () => Promise<void>;
 };
 
@@ -146,11 +149,12 @@ export async function startInProcess(
   const done = app.get(IngestionService).run();
   // A rejection is checked by the test through `done`; never leave it unhandled meanwhile.
   done.catch(() => undefined);
-  const port = app.get(HealthService).port();
+  const healthUrl = `http://127.0.0.1:${app.get(HealthService).port()}`;
   return {
     app,
     done,
-    healthUrl: `http://127.0.0.1:${port}`,
+    healthUrl,
+    metrics: () => scrape(healthUrl),
     stop: async () => {
       await app.close();
       await done;

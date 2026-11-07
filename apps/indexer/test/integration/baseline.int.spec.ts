@@ -16,6 +16,7 @@ import { verifyRange } from '../../src/verify/verify-range.js';
 import { ANVIL_CHAIN_ID, startAnvil, type TestAnvil } from './harness/anvil.js';
 import { startPostgres, type TestPostgres } from './harness/postgres.js';
 import { deployMockToken, seededRandom, type TestToken } from './harness/token.js';
+import { scrape } from './harness/metrics.js';
 import { waitFor } from './harness/wait-for.js';
 
 const CONFIRMATIONS = 2n;
@@ -56,17 +57,6 @@ async function waitForCheckpoint(block: bigint): Promise<void> {
     timeoutMs: 60_000,
     description: `checkpoint at block ${block}`,
   });
-}
-
-/** One scrape of the indexer's `/metrics`, as `series → value` (`name` or `name{labels}`). */
-async function scrape(app: INestApplicationContext): Promise<Map<string, number>> {
-  const res = await fetch(`http://127.0.0.1:${app.get(HealthService).port()}/metrics`);
-  const series = new Map<string, number>();
-  for (const line of (await res.text()).split('\n')) {
-    const match = /^([a-z_]+(?:\{[^}]*\})?) (\S+)$/.exec(line);
-    if (match?.[1] !== undefined && match[2] !== undefined) series.set(match[1], Number(match[2]));
-  }
-  return series;
 }
 
 async function parity() {
@@ -129,7 +119,7 @@ describe('baseline: index 500 transfers', () => {
     expect(checkpoint?.lastBlock).toBeLessThanOrEqual(head - CONFIRMATIONS);
 
     // The metrics tell the same story as the database (docs/09 "Indexer metrics").
-    const metrics = await scrape(indexer.app);
+    const metrics = await scrape(`http://127.0.0.1:${indexer.app.get(HealthService).port()}`);
     const processed = metrics.get('gapless_indexer_processed_block');
     const headSeen = metrics.get('gapless_indexer_head_block') ?? 0;
     expect(processed).toBe(Number(checkpoint?.lastBlock));
@@ -147,6 +137,16 @@ describe('baseline: index 500 transfers', () => {
     const tickAgeSeconds =
       Date.now() / 1000 - (metrics.get('gapless_indexer_last_tick_timestamp_seconds') ?? 0);
     expect(tickAgeSeconds).toBeLessThan(10);
+    // RPC calls over HTTP, all fine; no WebSocket in this run.
+    expect(metrics.sum('gapless_rpc_requests_total', { transport: 'http', result: 'ok' })).toBe(
+      metrics.sum('gapless_rpc_request_duration_seconds_count'),
+    );
+    expect(
+      metrics.sum('gapless_rpc_requests_total', { method: 'eth_getLogs', result: 'ok' }),
+    ).toBeGreaterThan(10);
+    expect(metrics.sum('gapless_rpc_requests_total', { result: 'error' })).toBe(0);
+    expect(metrics.get('gapless_indexer_ws_connected')).toBe(0);
+    expect(metrics.get('gapless_indexer_ws_reconnects_total')).toBe(0);
 
     await stopIndexer(indexer);
   });
