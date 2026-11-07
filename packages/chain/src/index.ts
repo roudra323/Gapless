@@ -13,7 +13,12 @@ export {
   type RpcCallResult,
   type RpcTransport,
 } from './rpc-observer.js';
-export { type NewHeadsOptions, type NewHeadsSubscription, subscribeNewHeads } from './ws-client.js';
+export {
+  type NewHeadsOptions,
+  type NewHeadsSubscription,
+  subscribeNewHeads,
+  WebSocketSubscribeTimeoutError,
+} from './ws-client.js';
 export {
   decodeTransferLog,
   type DecodedTransfer,

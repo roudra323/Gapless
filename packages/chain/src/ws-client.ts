@@ -23,6 +23,15 @@ export type NewHeadsSubscription = {
   readonly close: () => Promise<void>;
 };
 
+/** Thrown when opening the socket and `eth_subscribe` take longer than `timeoutMs`. */
+export class WebSocketSubscribeTimeoutError extends Error {
+  override readonly name = 'WebSocketSubscribeTimeoutError';
+
+  constructor(timeoutMs: number) {
+    super(`opening the WebSocket and eth_subscribe took more than ${timeoutMs} ms`);
+  }
+}
+
 /**
  * Subscribes to `newHeads` over a WebSocket (docs/03 "HeadTracker"). The socket is a doorbell
  * only: it carries block numbers, never event data.
@@ -31,7 +40,13 @@ export type NewHeadsSubscription = {
  * with the same backoff as every other RPC call (docs/03 "Retry policy"). viem's default would
  * also give up after 5 attempts.
  *
- * @throws when the socket can't be opened or `eth_subscribe` fails.
+ * Opening the socket and `eth_subscribe` together must finish within `timeoutMs`. viem has no
+ * timeout for either: on a network that drops packets (or a socket whose handshake answer never
+ * arrives) the call would wait forever, so the caller would never reconnect and shutdown would
+ * hang.
+ *
+ * @throws when the socket can't be opened, `eth_subscribe` fails, or both take too long
+ * ({@link WebSocketSubscribeTimeoutError}).
  */
 export async function subscribeNewHeads({
   url,
@@ -44,38 +59,49 @@ export async function subscribeNewHeads({
     transport: webSocket(url, { reconnect: false, retryCount: 0, timeout: timeoutMs }),
   });
   const { transport } = client;
+  // Starts opening the socket. This exact client is the one to close: viem caches socket clients
+  // by URL, so a later `getRpcClient()` could return (or open) another one.
+  const opening = transport.getRpcClient();
 
   let ready = false;
   let closed = false;
   let reported = false;
-  const close = async (): Promise<void> => {
-    if (closed) return;
-    closed = true;
-    try {
-      // getRpcClient returns viem's cached socket client. Closing it also removes it from the
-      // cache, so the next subscribe to the same URL opens a new socket.
-      (await transport.getRpcClient()).close();
-    } catch {
-      // The socket could not be opened, so there is nothing to close.
+  const close = (): Promise<void> => {
+    if (!closed) {
+      closed = true;
+      // Not awaited on purpose: a socket that is still opening (after a timeout) is closed as soon
+      // as it opens, and one that fails to open has nothing to close. Never wait here for an open
+      // that may never finish.
+      void opening.then(
+        (rpcClient) => rpcClient.close(),
+        () => undefined,
+      );
     }
+    return Promise.resolve();
   };
 
   try {
     await observeRpcCall(onCall, 'eth_subscribe', 'ws', () =>
-      transport.subscribe({
-        params: ['newHeads'],
-        onData: (data: { result?: { number?: Hex } }) => {
-          const number = data.result?.number;
-          if (!closed && number !== undefined) onHead(hexToBigInt(number));
-        },
-        onError: (err: unknown) => {
-          // Before `ready`, the same error rejects `subscribe` below, so it is not reported twice.
-          // A failing socket reports both an error and a close: tell the caller once.
-          if (!ready || closed || reported) return;
-          reported = true;
-          onError(err);
-        },
-      }),
+      withTimeout(
+        timeoutMs,
+        (async () => {
+          await opening;
+          await transport.subscribe({
+            params: ['newHeads'],
+            onData: (data: { result?: { number?: Hex } }) => {
+              const number = data.result?.number;
+              if (!closed && number !== undefined) onHead(hexToBigInt(number));
+            },
+            onError: (err: unknown) => {
+              // Before `ready`, the same error rejects `subscribe` above, so it is not reported
+              // twice. A failing socket reports both an error and a close: tell the caller once.
+              if (!ready || closed || reported) return;
+              reported = true;
+              onError(err);
+            },
+          });
+        })(),
+      ),
     );
   } catch (err) {
     await close();
@@ -83,4 +109,19 @@ export async function subscribeNewHeads({
   }
   ready = true;
   return { close };
+}
+
+/** `promise`, or a {@link WebSocketSubscribeTimeoutError} after `timeoutMs`. */
+async function withTimeout<T>(timeoutMs: number, promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new WebSocketSubscribeTimeoutError(timeoutMs)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+    // The losing promise may reject later (the open fails after the timeout): not an error here.
+    promise.catch(() => undefined);
+  }
 }
