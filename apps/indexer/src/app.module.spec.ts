@@ -80,6 +80,14 @@ describe('AppModule', () => {
     expect(find('health server listening')).toMatchObject({ port });
     expect((await fetch(`http://127.0.0.1:${port}/healthz`)).status).toBe(200);
     expect((await fetch(`http://127.0.0.1:${port}/readyz`)).status).toBe(503);
+    // The same server serves the metrics registry.
+    const scrape = await fetch(`http://127.0.0.1:${port}/metrics`);
+    expect(scrape.status).toBe(200);
+    expect(scrape.headers.get('content-type')).toMatch(/^text\/plain; version=0\.0\.4/);
+    const body = await scrape.text();
+    expect(body).toContain('# TYPE gapless_indexer_head_block gauge');
+    expect(body).toContain('process_cpu_user_seconds_total');
+    expect(body).not.toContain('hunter2');
 
     const logger = await app.resolve(PinoLogger);
     // pino-http wraps the err serializer; the inner errors of a cause must survive it.

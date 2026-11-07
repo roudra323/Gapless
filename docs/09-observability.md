@@ -9,6 +9,8 @@
 
 ### Indexer metrics (this list is the contract; keep it in sync with the code)
 
+Defined in one place, `apps/indexer/src/metrics/indexer-metrics.ts` (the `IndexerMetrics` provider), and served on the indexer's `/metrics`. `indexer-metrics.spec.ts` reads this table and fails if a name, type or label set differs from the code. Histogram buckets: batch duration `0.05 … 30` s, RPC duration `0.01 … 10` s (the RPC timeout). The batch outcomes start at 0 for both `result` values, so the first error shows as an increase.
+
 | Metric                                        | Type      | Labels                                                                         | Meaning                             |
 | --------------------------------------------- | --------- | ------------------------------------------------------------------------------ | ----------------------------------- |
 | `gapless_indexer_head_block`                  | gauge     | —                                                                              | latest chain head seen              |

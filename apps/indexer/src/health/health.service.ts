@@ -14,13 +14,17 @@ import { PinoLogger } from 'nestjs-pino';
 import { INDEXER_CONFIG } from '../config.provider.js';
 import { DB_HANDLE } from '../ingestion/ingestion.providers.js';
 import { LeaderStatus } from '../leader/leader-status.js';
+import { IndexerMetrics } from '../metrics/indexer-metrics.js';
 import { isLive, isReady } from './health-status.js';
 import { Heartbeat } from './heartbeat.js';
 
 /** A readiness probe must answer fast; a database slower than this counts as unreachable. */
 export const DB_CHECK_TIMEOUT_MS = 2000;
 
-/** Runs the health server for the whole process life (docs/03 "Health"). */
+/**
+ * Runs the health server for the whole process life (docs/03 "Health"): `/healthz`, `/readyz`
+ * and `/metrics` (docs/09) on `METRICS_PORT`.
+ */
 @Injectable()
 export class HealthService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly server: HealthServer;
@@ -33,12 +37,16 @@ export class HealthService implements OnApplicationBootstrap, OnApplicationShutd
     @Inject(DB_HANDLE) private readonly db: DbHandle,
     private readonly heartbeat: Heartbeat,
     private readonly leader: LeaderStatus,
+    metrics: IndexerMetrics,
   ) {
     logger.setContext(HealthService.name);
-    this.server = new HealthServer({
-      live: () => isLive(this.heartbeat.lastBeatAt(), Date.now(), this.config.POLL_INTERVAL_MS),
-      ready: () => this.ready(),
-    });
+    this.server = new HealthServer(
+      {
+        live: () => isLive(this.heartbeat.lastBeatAt(), Date.now(), this.config.POLL_INTERVAL_MS),
+        ready: () => this.ready(),
+      },
+      metrics.registry,
+    );
   }
 
   /** The bound port, after boot (tests listen on port 0). */

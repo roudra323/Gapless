@@ -23,6 +23,8 @@ Exit codes of the indexer: 0 = clean stop on SIGTERM or SIGINT (the open batch c
 
 Health, on `METRICS_PORT` (9464, never public): `GET /healthz` is 200 while the loop's heartbeat is fresh; `GET /readyz` is 200 only on the leader with a reachable DB. A standby is live but not ready.
 
+Metrics, on the same port: `GET /metrics` serves every metric in `docs/09` "Indexer metrics" (defined in `src/metrics/indexer-metrics.ts`) plus the default Node.js process metrics. Phase 6 in progress: the metrics are defined and served; the loop, RPC and WebSocket code fill them in the next steps, so until then they stay at 0.
+
 ## Structure
 
 | File                                  | Purpose                                                                                                                      |

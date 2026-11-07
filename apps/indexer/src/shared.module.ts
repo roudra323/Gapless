@@ -10,10 +10,12 @@ import {
   rpcClientProvider,
 } from './ingestion/ingestion.providers.js';
 import { LeaderStatus } from './leader/leader-status.js';
+import { IndexerMetrics } from './metrics/indexer-metrics.js';
 
 /**
  * The process-wide providers that more than one feature uses: the config, the RPC client, the
- * database pool, the heartbeat and the leader status. Global, so the features import nothing.
+ * database pool, the heartbeat, the leader status and the metrics. Global, so the features import
+ * nothing.
  */
 @Global()
 @Module({})
@@ -27,8 +29,10 @@ export class SharedModule {
         dbHandleProvider,
         { provide: Heartbeat, useFactory: () => new Heartbeat() },
         { provide: LeaderStatus, useFactory: () => new LeaderStatus() },
+        // One registry per app instance (tests boot several in one process).
+        { provide: IndexerMetrics, useFactory: () => new IndexerMetrics() },
       ],
-      exports: [INDEXER_CONFIG, RPC_CLIENT, DB_HANDLE, Heartbeat, LeaderStatus],
+      exports: [INDEXER_CONFIG, RPC_CLIENT, DB_HANDLE, Heartbeat, LeaderStatus, IndexerMetrics],
     };
   }
 }
