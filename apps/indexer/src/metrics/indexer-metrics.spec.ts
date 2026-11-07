@@ -112,6 +112,46 @@ describe('IndexerMetrics', () => {
       );
     });
 
+    it('counts each RPC call by method, transport and result, and times it', async () => {
+      const metrics = new IndexerMetrics();
+      metrics.recordRpcCall({
+        method: 'eth_getLogs',
+        transport: 'http',
+        result: 'ok',
+        durationSeconds: 0.02,
+      });
+      metrics.recordRpcCall({
+        method: 'eth_getLogs',
+        transport: 'http',
+        result: 'rate_limited',
+        durationSeconds: 0.01,
+      });
+      metrics.recordRpcCall({
+        method: 'eth_subscribe',
+        transport: 'ws',
+        result: 'error',
+        durationSeconds: 0.5,
+      });
+
+      const requests = await metrics.rpcRequests.get();
+      expect(requests.values.map(({ labels, value: count }) => ({ ...labels, count }))).toEqual(
+        expect.arrayContaining([
+          { method: 'eth_getLogs', transport: 'http', result: 'ok', count: 1 },
+          { method: 'eth_getLogs', transport: 'http', result: 'rate_limited', count: 1 },
+          { method: 'eth_subscribe', transport: 'ws', result: 'error', count: 1 },
+        ]),
+      );
+      const durations = await metrics.rpcDuration.get();
+      const count = (method: string) =>
+        durations.values.find(
+          (sample) =>
+            sample.metricName === 'gapless_rpc_request_duration_seconds_count' &&
+            (sample.labels as Record<string, unknown>).method === method,
+        )?.value;
+      expect(count('eth_getLogs')).toBe(2);
+      expect(count('eth_subscribe')).toBe(1);
+    });
+
     it('keeps a block number up to 2^53 - 1 exact', async () => {
       const metrics = new IndexerMetrics();
       metrics.recordHead(9_007_199_254_740_991n); // Number.MAX_SAFE_INTEGER

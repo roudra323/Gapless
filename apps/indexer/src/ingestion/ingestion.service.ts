@@ -96,7 +96,12 @@ export class IngestionService implements BeforeApplicationShutdown, OnApplicatio
         subscribeHeads:
           wsUrl === undefined
             ? undefined
-            : (handlers) => subscribeNewHeads({ url: wsUrl, ...handlers }),
+            : (handlers) =>
+                subscribeNewHeads({
+                  url: wsUrl,
+                  ...handlers,
+                  onCall: (call) => this.metrics.recordRpcCall(call),
+                }),
       },
       pollIntervalMs: config.POLL_INTERVAL_MS,
       logger: log,

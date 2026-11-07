@@ -1,3 +1,4 @@
+import type { RpcCall } from '@gapless/chain';
 import {
   Counter,
   createMetricsRegistry,
@@ -17,10 +18,6 @@ export const RPC_DURATION_BUCKETS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 
 
 /** `result` of `gapless_indexer_batches_total`. */
 export type BatchResult = 'ok' | 'error';
-/** `transport` of the RPC metrics. */
-export type RpcTransport = 'http' | 'ws';
-/** `result` of `gapless_rpc_requests_total`. */
-export type RpcResult = 'ok' | 'error' | 'rate_limited';
 
 /**
  * Every metric of the indexer process, on one registry (docs/09 "Indexer metrics" is the
@@ -181,6 +178,12 @@ export class IndexerMetrics {
 
   recordLeader(isLeader: boolean): void {
     this.isLeader.set(isLeader ? 1 : 0);
+  }
+
+  /** One finished JSON-RPC call (the `onCall` observer of `createRpcClient`, packages/chain). */
+  recordRpcCall({ method, transport, result, durationSeconds }: RpcCall): void {
+    this.rpcRequests.inc({ method, transport, result });
+    this.rpcDuration.observe({ method, transport }, durationSeconds);
   }
 
   /** A heartbeat at `atMs` (epoch milliseconds). */

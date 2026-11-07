@@ -6,8 +6,9 @@ import { PinoLogger } from 'nestjs-pino';
 import type { PublicClient } from 'viem';
 
 import { INDEXER_CONFIG } from '../config.provider.js';
+import { IndexerMetrics } from '../metrics/indexer-metrics.js';
 
-/** DI token for the viem HTTP client (`createRpcClient`, packages/chain). */
+/** DI token for the viem HTTP client (`createRpcClient`, packages/chain), with the RPC metrics. */
 export const RPC_CLIENT = Symbol('RPC_CLIENT');
 
 /** DI token for the Postgres pool and its Drizzle instance (`createDb`, packages/db). */
@@ -18,8 +19,9 @@ export const DB_APPLICATION_NAME = 'gapless-indexer';
 
 export const rpcClientProvider: FactoryProvider<PublicClient> = {
   provide: RPC_CLIENT,
-  inject: [INDEXER_CONFIG],
-  useFactory: (config: IndexerConfig) => createRpcClient({ url: config.RPC_HTTP_URL }),
+  inject: [INDEXER_CONFIG, IndexerMetrics],
+  useFactory: (config: IndexerConfig, metrics: IndexerMetrics) =>
+    createRpcClient({ url: config.RPC_HTTP_URL, onCall: (call) => metrics.recordRpcCall(call) }),
 };
 
 /** The pool is lazy: no connection opens before the first query. `IngestionService` closes it. */
