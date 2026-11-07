@@ -2,6 +2,7 @@ import { indexerCheckpoints } from '@gapless/db';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { ApiMetrics } from '../../src/metrics/api-metrics.js';
 import { StatsRepository } from '../../src/stats/stats.repository.js';
 import { startPostgres, type TestPostgres } from './harness/postgres.js';
 import { address, CHAIN_ID, insertTransfers, OTHER_TOKEN, TOKEN } from './harness/seed.js';
@@ -11,7 +12,7 @@ let repo: StatsRepository;
 
 beforeAll(async () => {
   pg = await startPostgres();
-  repo = new StatsRepository(pg.handle);
+  repo = new StatsRepository(pg.handle, new ApiMetrics());
 });
 
 afterAll(async () => {

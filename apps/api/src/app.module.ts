@@ -2,7 +2,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import type { ApiConfig } from '@gapless/config';
 import { loggerOptions } from '@gapless/observability';
-import { type DynamicModule, Module } from '@nestjs/common';
+import {
+  type DynamicModule,
+  type MiddlewareConsumer,
+  Module,
+  type NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import type { DestinationStream } from 'pino';
@@ -10,6 +16,7 @@ import type { DestinationStream } from 'pino';
 import { ProblemDetailsFilter } from './common/problem-details.filter.js';
 import { HealthModule } from './health/health.module.js';
 import { LifecycleService } from './lifecycle.service.js';
+import { ALL_ROUTES, HttpMetricsMiddleware } from './metrics/http-metrics.middleware.js';
 import { requestId } from './request-id.js';
 import { SharedModule } from './shared.module.js';
 import { StatsModule } from './stats/stats.module.js';
@@ -19,7 +26,14 @@ import { TransfersModule } from './transfers/transfers.module.js';
 export const SERVICE_NAME = 'api';
 
 @Module({})
-export class AppModule {
+export class AppModule implements NestModule {
+  /** The HTTP metrics see every request, matched or not (the same routes as nestjs-pino). */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer
+      .apply(HttpMetricsMiddleware)
+      .forRoutes({ path: ALL_ROUTES, method: RequestMethod.ALL });
+  }
+
   /**
    * The root module for a validated config. `logDestination` replaces stdout in tests, the same
    * way as in `createLogger` (packages/observability).

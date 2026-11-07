@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { API_CONFIG } from '../config.provider.js';
 import { DB_HANDLE } from '../database/database.tokens.js';
+import { ApiMetrics } from '../metrics/api-metrics.js';
 import { HealthService } from './health.service.js';
 
 /** A database handle whose `select 1` result the test controls. */
@@ -35,6 +36,7 @@ async function boot(handle: unknown): Promise<{ base: string; service: HealthSer
       HealthService,
       { provide: API_CONFIG, useValue: { METRICS_PORT: 0 } as ApiConfig },
       { provide: DB_HANDLE, useValue: handle },
+      { provide: ApiMetrics, useValue: new ApiMetrics() },
     ],
   }).compile();
   app = await moduleRef.init();
@@ -70,6 +72,22 @@ describe('HealthService', () => {
 
     expect((await fetch(`${base}/healthz`)).status).toBe(200);
     expect((await fetch(`${base}/readyz`)).status).toBe(503);
+  });
+
+  it('serves the API metrics on /metrics', async () => {
+    const { base } = await boot(fakeDb().handle);
+    app?.get(ApiMetrics).recordHttpRequest({
+      method: 'GET',
+      route: '/v1/stats',
+      statusCode: 200,
+      durationSeconds: 0.01,
+    });
+
+    const res = await fetch(`${base}/metrics`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain(
+      'gapless_http_requests_total{method="GET",route="/v1/stats",status_class="2xx"} 1',
+    );
   });
 
   it('closes the health server with the app', async () => {

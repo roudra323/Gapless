@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { ApiMetrics } from '../../src/metrics/api-metrics.js';
 import type { PageRequest } from '../../src/transfers/transfers.repository.js';
 import { TransfersRepository } from '../../src/transfers/transfers.repository.js';
 import { startPostgres, type TestPostgres } from './harness/postgres.js';
@@ -26,7 +27,7 @@ const keys = (rows: readonly { blockNumber: bigint; logIndex: number }[]): strin
 
 beforeAll(async () => {
   pg = await startPostgres();
-  repo = new TransfersRepository(pg.handle);
+  repo = new TransfersRepository(pg.handle, new ApiMetrics());
 });
 
 afterAll(async () => {

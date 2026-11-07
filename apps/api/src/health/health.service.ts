@@ -12,11 +12,12 @@ import { PinoLogger } from 'nestjs-pino';
 
 import { API_CONFIG } from '../config.provider.js';
 import { DB_HANDLE } from '../database/database.tokens.js';
+import { ApiMetrics } from '../metrics/api-metrics.js';
 import { isDatabaseReachable } from './database-check.js';
 
 /**
- * `/healthz` and `/readyz` on `METRICS_PORT` for the whole process life (docs/02 "Ports"), with
- * the shared `HealthServer`.
+ * `/healthz`, `/readyz` and `/metrics` on `METRICS_PORT` for the whole process life (docs/02
+ * "Ports", docs/09 "Metrics"), with the shared `HealthServer`.
  *
  * - Live: always true. The server answers only while the event loop runs, which is the point of
  *   a liveness probe. It never depends on the database, so a DB outage does not restart pods.
@@ -35,12 +36,16 @@ export class HealthService
     private readonly logger: PinoLogger,
     @Inject(API_CONFIG) private readonly config: ApiConfig,
     @Inject(DB_HANDLE) private readonly db: DbHandle,
+    metrics: ApiMetrics,
   ) {
     logger.setContext(HealthService.name);
-    this.server = new HealthServer({
-      live: () => true,
-      ready: async () => !this.shuttingDown && (await isDatabaseReachable(this.db.pool)),
-    });
+    this.server = new HealthServer(
+      {
+        live: () => true,
+        ready: async () => !this.shuttingDown && (await isDatabaseReachable(this.db.pool)),
+      },
+      metrics.registry,
+    );
   }
 
   /** The bound port, after boot (tests listen on port 0). */

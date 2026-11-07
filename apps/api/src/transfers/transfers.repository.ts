@@ -5,6 +5,7 @@ import { and, desc, eq, ne, type SQL, sql } from 'drizzle-orm';
 import type { Cursor } from '../common/cursor.js';
 import { withDatabase } from '../common/database-unavailable.js';
 import { DB_HANDLE } from '../database/database.tokens.js';
+import { ApiMetrics } from '../metrics/api-metrics.js';
 import type { Direction, Transfer } from './transfer.js';
 
 /** One page request. `after` is the last row of the previous page; unset for the first page. */
@@ -43,13 +44,19 @@ const NEWEST_FIRST = [desc(transfers.blockNumber), desc(transfers.logIndex)];
 export class TransfersRepository {
   private readonly db: Database;
 
-  constructor(@Inject(DB_HANDLE) handle: DbHandle) {
+  // Value import of ApiMetrics: Nest resolves it from the constructor type (docs/05).
+  constructor(
+    @Inject(DB_HANDLE) handle: DbHandle,
+    private readonly metrics: ApiMetrics,
+  ) {
     this.db = handle.db;
   }
 
   /** The newest transfers of the token. */
   listRecent(page: PageRequest): Promise<Transfer[]> {
-    return withDatabase(() => this.selectPage(page));
+    return withDatabase(() =>
+      this.metrics.timeQuery('recent_transfers', () => this.selectPage(page)),
+    );
   }
 
   /**
@@ -57,22 +64,24 @@ export class TransfersRepository {
    * (`all`).
    */
   listForAddress(page: PageRequest, address: string, direction: Direction): Promise<Transfer[]> {
-    return withDatabase(async () => {
-      if (direction === 'out') return this.selectPage(page, eq(transfers.fromAddress, address));
-      if (direction === 'in') return this.selectPage(page, eq(transfers.toAddress, address));
+    return withDatabase(() =>
+      this.metrics.timeQuery('address_transfers', async () => {
+        if (direction === 'out') return this.selectPage(page, eq(transfers.fromAddress, address));
+        if (direction === 'in') return this.selectPage(page, eq(transfers.toAddress, address));
 
-      // `from = a OR to = a` would make Postgres combine both indexes and then sort every match.
-      // Two index scans of `limit` rows each, merged here, read at most 2 × limit entries.
-      // The second side skips self-transfers (from = to = a): the first side already has them.
-      const [sent, received] = await Promise.all([
-        this.selectPage(page, eq(transfers.fromAddress, address)),
-        this.selectPage(
-          page,
-          and(eq(transfers.toAddress, address), ne(transfers.fromAddress, address)),
-        ),
-      ]);
-      return [...sent, ...received].toSorted(newestFirst).slice(0, page.limit);
-    });
+        // `from = a OR to = a` would make Postgres combine both indexes and then sort every match.
+        // Two index scans of `limit` rows each, merged here, read at most 2 × limit entries.
+        // The second side skips self-transfers (from = to = a): the first side already has them.
+        const [sent, received] = await Promise.all([
+          this.selectPage(page, eq(transfers.fromAddress, address)),
+          this.selectPage(
+            page,
+            and(eq(transfers.toAddress, address), ne(transfers.fromAddress, address)),
+          ),
+        ]);
+        return [...sent, ...received].toSorted(newestFirst).slice(0, page.limit);
+      }),
+    );
   }
 
   private selectPage(page: PageRequest, filter?: SQL): Promise<Transfer[]> {

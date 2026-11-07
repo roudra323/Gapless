@@ -62,3 +62,41 @@ describe('GET /v1/stats', () => {
     });
   });
 });
+
+describe('GET /metrics on METRICS_PORT', () => {
+  it('counts requests by route template and status class, and times the queries', async () => {
+    await request(api.server).get('/v1/stats');
+    await request(api.server).get(`/v1/addresses/${address(1)}/transfers`);
+    await request(api.server).get('/v1/addresses/not-an-address/transfers');
+    await request(api.server).get('/v1/transfers?limit=1');
+    await request(api.server).get('/no/such/route/0xabc');
+
+    const res = await fetch(`${api.healthUrl}/metrics`);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    const series = (line: string) => expect(text).toMatch(new RegExp(`^${escape(line)} \\d+`, 'm'));
+
+    series('gapless_http_requests_total{method="GET",route="/v1/stats",status_class="2xx"}');
+    // The template, never the address in the URL.
+    series(
+      'gapless_http_requests_total{method="GET",route="/v1/addresses/:address/transfers",status_class="2xx"}',
+    );
+    series(
+      'gapless_http_requests_total{method="GET",route="/v1/addresses/:address/transfers",status_class="4xx"}',
+    );
+    series('gapless_http_requests_total{method="GET",route="/v1/transfers",status_class="2xx"}');
+    series('gapless_http_requests_total{method="GET",route="unmatched",status_class="4xx"}');
+    expect(text).not.toContain('not-an-address');
+    expect(text).not.toContain('/no/such/route');
+    expect(text).not.toContain('/healthz'); // probes are outside Nest
+
+    series('gapless_http_request_duration_seconds_count{method="GET",route="/v1/stats"}');
+    series('gapless_db_query_duration_seconds_count{query="stats"}');
+    series('gapless_db_query_duration_seconds_count{query="address_transfers"}');
+    series('gapless_db_query_duration_seconds_count{query="recent_transfers"}');
+  });
+});
+
+function escape(text: string): string {
+  return text.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

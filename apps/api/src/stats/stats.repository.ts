@@ -4,6 +4,7 @@ import { and, count, eq } from 'drizzle-orm';
 
 import { withDatabase } from '../common/database-unavailable.js';
 import { DB_HANDLE } from '../database/database.tokens.js';
+import { ApiMetrics } from '../metrics/api-metrics.js';
 
 /** The indexer's progress for one chain and token, from `indexer_checkpoints`. */
 export type Checkpoint = {
@@ -23,7 +24,11 @@ export type StatsSnapshot = {
 export class StatsRepository {
   private readonly db: Database;
 
-  constructor(@Inject(DB_HANDLE) handle: DbHandle) {
+  // Value import of ApiMetrics: Nest resolves it from the constructor type (docs/05).
+  constructor(
+    @Inject(DB_HANDLE) handle: DbHandle,
+    private readonly metrics: ApiMetrics,
+  ) {
     this.db = handle.db;
   }
 
@@ -35,28 +40,30 @@ export class StatsRepository {
    */
   read(chainId: number, tokenAddress: string): Promise<StatsSnapshot> {
     return withDatabase(() =>
-      this.db.transaction(
-        async (tx) => {
-          const [counted] = await tx
-            .select({ total: count() })
-            .from(transfers)
-            .where(and(eq(transfers.chainId, chainId), eq(transfers.tokenAddress, tokenAddress)));
-          const [checkpoint] = await tx
-            .select({
-              lastBlock: indexerCheckpoints.lastBlock,
-              headBlock: indexerCheckpoints.headBlock,
-              updatedAt: indexerCheckpoints.updatedAt,
-            })
-            .from(indexerCheckpoints)
-            .where(
-              and(
-                eq(indexerCheckpoints.chainId, chainId),
-                eq(indexerCheckpoints.tokenAddress, tokenAddress),
-              ),
-            );
-          return { totalTransfers: BigInt(counted?.total ?? 0), checkpoint };
-        },
-        { isolationLevel: 'repeatable read', accessMode: 'read only' },
+      this.metrics.timeQuery('stats', () =>
+        this.db.transaction(
+          async (tx) => {
+            const [counted] = await tx
+              .select({ total: count() })
+              .from(transfers)
+              .where(and(eq(transfers.chainId, chainId), eq(transfers.tokenAddress, tokenAddress)));
+            const [checkpoint] = await tx
+              .select({
+                lastBlock: indexerCheckpoints.lastBlock,
+                headBlock: indexerCheckpoints.headBlock,
+                updatedAt: indexerCheckpoints.updatedAt,
+              })
+              .from(indexerCheckpoints)
+              .where(
+                and(
+                  eq(indexerCheckpoints.chainId, chainId),
+                  eq(indexerCheckpoints.tokenAddress, tokenAddress),
+                ),
+              );
+            return { totalTransfers: BigInt(counted?.total ?? 0), checkpoint };
+          },
+          { isolationLevel: 'repeatable read', accessMode: 'read only' },
+        ),
       ),
     );
   }
