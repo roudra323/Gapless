@@ -180,6 +180,16 @@ export class IndexerMetrics {
     this.isLeader.set(isLeader ? 1 : 0);
   }
 
+  /** The WS head feed turned healthy (`true`) or not; poll-only mode stays `false`. */
+  recordWsConnected(connected: boolean): void {
+    this.wsConnected.set(connected ? 1 : 0);
+  }
+
+  /** One WebSocket subscribe attempt after the first (after a loss, a failed connect or a stall). */
+  recordWsReconnect(): void {
+    this.wsReconnects.inc();
+  }
+
   /** One finished JSON-RPC call (the `onCall` observer of `createRpcClient`, packages/chain). */
   recordRpcCall({ method, transport, result, durationSeconds }: RpcCall): void {
     this.rpcRequests.inc({ method, transport, result });

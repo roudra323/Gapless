@@ -14,10 +14,14 @@ function fastWait(waits: number[]) {
   };
 }
 
-function build(sources: HeadSources, pollIntervalMs = 1000) {
+const STALL_AFTER_MS = 3000;
+
+function build(sources: HeadSources, pollIntervalMs = 1000, now?: () => number) {
   const lines: Line[] = [];
   const waits: number[] = [];
   const changes: bigint[] = [];
+  const connected: boolean[] = [];
+  const reconnects = { count: 0 };
   const tracker = new HeadTracker({
     sources,
     pollIntervalMs,
@@ -28,9 +32,13 @@ function build(sources: HeadSources, pollIntervalMs = 1000) {
     redact: (err) => (err instanceof Error ? `redacted: ${err.message}` : err),
     wait: fastWait(waits),
     random: () => 0.5,
+    wsStallAfterMs: STALL_AFTER_MS,
+    now,
     onHeadChange: (head) => changes.push(head),
+    onWsConnected: (value) => connected.push(value),
+    onWsReconnect: () => (reconnects.count += 1),
   });
-  return { tracker, lines, waits, changes };
+  return { tracker, lines, waits, changes, connected, reconnects };
 }
 
 /** A fake WS source: the test pushes heads and kills the socket. */
@@ -217,5 +225,126 @@ describe('HeadTracker', () => {
     const after = polls;
     await delay(20);
     expect(polls).toBe(after);
+  });
+
+  describe('ws_connected, reconnects and the stall rule', () => {
+    it('reports the feed as up while subscribed, down after a loss, and counts the reconnect', async () => {
+      const socket = fakeSocket();
+      const { tracker, connected, reconnects } = build({
+        pollHead: () => Promise.resolve(1n),
+        ...socket,
+      });
+      tracker.start();
+      await vi.waitFor(() => expect(connected).toEqual([false, true]));
+
+      socket.kill();
+      await vi.waitFor(() => expect(socket.stats.connects).toBe(2));
+      await vi.waitFor(() => expect(connected).toEqual([false, true, false, true]));
+      expect(reconnects.count).toBe(1);
+
+      await tracker.stop();
+      expect(connected.at(-1)).toBe(false);
+    });
+
+    it('counts every failed attempt as a reconnect and stays down until one works', async () => {
+      const socket = fakeSocket({ failConnects: 3 });
+      const { tracker, connected, reconnects } = build({
+        pollHead: () => Promise.resolve(1n),
+        ...socket,
+      });
+      started(tracker);
+
+      await vi.waitFor(() => expect(connected.at(-1)).toBe(true));
+      expect(socket.stats.connects).toBe(4);
+      expect(reconnects.count).toBe(3);
+      expect(connected.filter((value) => value)).toHaveLength(1);
+    });
+
+    it('stays down in poll-only mode', async () => {
+      const { tracker, connected, reconnects } = build({ pollHead: () => Promise.resolve(1n) });
+      started(tracker);
+      await vi.waitFor(() => expect(tracker.latest()).toBe(1n));
+      await delay(10);
+      expect(connected).toEqual([false]);
+      expect(reconnects.count).toBe(0);
+    });
+
+    it('drops a socket that stays silent while the poll sees newer heads, then reconnects', async () => {
+      let clock = 0;
+      let head = 100n;
+      const socket = fakeSocket();
+      const { tracker, lines, connected, reconnects } = build(
+        {
+          // Each poll is one second later and one block higher; the socket delivers nothing.
+          pollHead: () => {
+            clock += 1000;
+            head += 1n;
+            return Promise.resolve(head);
+          },
+          ...socket,
+        },
+        1000,
+        () => clock,
+      );
+      started(tracker);
+
+      await vi.waitFor(() => expect(socket.stats.connects).toBeGreaterThanOrEqual(2));
+      const stall = lines.find((line) => line.message === 'ws head feed stalled, reconnecting');
+      expect(stall?.level).toBe('warn');
+      expect(stall?.fields.behindMs).toBeGreaterThan(STALL_AFTER_MS);
+      // Logged once as a stall, not again as a lost socket.
+      expect(lines.some((line) => line.message === 'ws head feed lost')).toBe(false);
+      expect(socket.stats.closes).toBeGreaterThanOrEqual(1);
+      expect(reconnects.count).toBeGreaterThanOrEqual(1);
+      expect(connected.slice(0, 3)).toEqual([false, true, false]);
+    });
+
+    it('never drops a socket on a quiet chain (no new heads at all)', async () => {
+      let clock = 0;
+      const socket = fakeSocket();
+      let polls = 0;
+      const { tracker, connected } = build(
+        {
+          pollHead: () => {
+            polls += 1;
+            clock += 60_000;
+            return Promise.resolve(5n);
+          },
+          ...socket,
+        },
+        1000,
+        () => clock,
+      );
+      started(tracker);
+
+      await vi.waitFor(() => expect(polls).toBeGreaterThan(20));
+      expect(socket.stats.connects).toBe(1);
+      expect(connected).toEqual([false, true]);
+    });
+
+    it('keeps a socket that delivers the heads the poll sees', async () => {
+      let clock = 0;
+      let head = 100n;
+      let polls = 0;
+      const socket = fakeSocket();
+      const { tracker } = build(
+        {
+          pollHead: () => {
+            polls += 1;
+            clock += 1000;
+            head += 1n;
+            socket.push(head);
+            return Promise.resolve(head);
+          },
+          ...socket,
+        },
+        1000,
+        () => clock,
+      );
+      started(tracker);
+
+      await vi.waitFor(() => expect(polls).toBeGreaterThan(20));
+      expect(socket.stats.connects).toBe(1);
+    });
   });
 });

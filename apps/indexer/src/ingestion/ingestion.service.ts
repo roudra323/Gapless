@@ -107,7 +107,11 @@ export class IngestionService implements BeforeApplicationShutdown, OnApplicatio
       logger: log,
       redact,
       wait,
+      // docs/03 "HeadTracker": the socket is stalled after 3 block times behind the poll.
+      wsStallAfterMs: 3 * config.BLOCK_TIME_MS,
       onHeadChange: (head) => this.metrics.recordHead(head),
+      onWsConnected: (connected) => this.metrics.recordWsConnected(connected),
+      onWsReconnect: () => this.metrics.recordWsReconnect(),
     });
 
     const getHeader = async (block: bigint) =>

@@ -112,6 +112,17 @@ describe('IndexerMetrics', () => {
       );
     });
 
+    it('reports the WS feed as 1 or 0 and counts reconnects', async () => {
+      const metrics = new IndexerMetrics();
+      metrics.recordWsConnected(true);
+      expect(await value(metrics, 'gapless_indexer_ws_connected')).toBe(1);
+      metrics.recordWsConnected(false);
+      expect(await value(metrics, 'gapless_indexer_ws_connected')).toBe(0);
+      metrics.recordWsReconnect();
+      metrics.recordWsReconnect();
+      expect(await value(metrics, 'gapless_indexer_ws_reconnects_total')).toBe(2);
+    });
+
     it('counts each RPC call by method, transport and result, and times it', async () => {
       const metrics = new IndexerMetrics();
       metrics.recordRpcCall({
