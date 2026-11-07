@@ -128,6 +128,11 @@ export const indexerConfigSchema = appConfigSchema.extend({
   CONFIRMATIONS: bigintAtLeast(0n).default(5n),
   BATCH_SIZE: bigintAtLeast(1n).default(2000n),
   POLL_INTERVAL_MS: intAtLeast(100).default(4000),
+  /**
+   * The chain's expected block time (12 s on Ethereum). The WebSocket head feed counts as stalled
+   * when it is behind the poll for more than 3 × this (docs/03 "HeadTracker").
+   */
+  BLOCK_TIME_MS: intAtLeast(100).default(12_000),
   /** Secret, optional: a WebSocket URL that only wakes the loop sooner (docs/03 "HeadTracker"). */
   RPC_WS_URL: optionalWsUrl,
   /** The minimum rewind depth on a reorg (docs/03 "Reorg guard"). */

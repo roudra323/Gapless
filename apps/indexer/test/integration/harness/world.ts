@@ -57,6 +57,7 @@ export async function startWorld(): Promise<World> {
     CONFIRMATIONS: 2n,
     BATCH_SIZE: 10n,
     POLL_INTERVAL_MS: 100,
+    BLOCK_TIME_MS: 12_000,
     REORG_REWIND_BLOCKS: 64n,
     SHUTDOWN_TIMEOUT_MS: 20_000,
     METRICS_PORT: 0,

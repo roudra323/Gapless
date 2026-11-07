@@ -223,6 +223,7 @@ All config is validated at boot by Zod schemas in `packages/config`. An invalid 
 | `CONFIRMATIONS`       | indexer | `5`                                                                   |
 | `BATCH_SIZE`          | indexer | `2000` (max blocks per `getLogs`)                                     |
 | `POLL_INTERVAL_MS`    | indexer | `4000`                                                                |
+| `BLOCK_TIME_MS`       | indexer | `12000` (expected block time; WS stall after 3 ×, docs/03)            |
 | `REORG_REWIND_BLOCKS` | indexer | `64`                                                                  |
 | `SHUTDOWN_TIMEOUT_MS` | apps    | `20000` (must be less than the pod's `terminationGracePeriodSeconds`) |
 
