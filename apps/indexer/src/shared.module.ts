@@ -27,10 +27,21 @@ export class SharedModule {
         indexerConfigProvider(config),
         rpcClientProvider,
         dbHandleProvider,
-        { provide: Heartbeat, useFactory: () => new Heartbeat() },
-        { provide: LeaderStatus, useFactory: () => new LeaderStatus() },
         // One registry per app instance (tests boot several in one process).
         { provide: IndexerMetrics, useFactory: () => new IndexerMetrics() },
+        // The gauges read the same objects as /healthz and /readyz, so they can't disagree.
+        {
+          provide: Heartbeat,
+          useFactory: (metrics: IndexerMetrics) =>
+            new Heartbeat(Date.now, (atMs) => metrics.recordTick(atMs)),
+          inject: [IndexerMetrics],
+        },
+        {
+          provide: LeaderStatus,
+          useFactory: (metrics: IndexerMetrics) =>
+            new LeaderStatus((isLeader) => metrics.recordLeader(isLeader)),
+          inject: [IndexerMetrics],
+        },
       ],
       exports: [INDEXER_CONFIG, RPC_CLIENT, DB_HANDLE, Heartbeat, LeaderStatus, IndexerMetrics],
     };

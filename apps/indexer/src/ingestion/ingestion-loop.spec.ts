@@ -11,6 +11,7 @@ import {
   RangeInconsistentError,
   TokenNotContractError,
 } from './ingestion-errors.js';
+import { IndexerMetrics } from '../metrics/indexer-metrics.js';
 import { type ChainPort, IngestionLoop, type LoopSettings } from './ingestion-loop.js';
 
 function hash(n: bigint): Hex {
@@ -138,10 +139,12 @@ function setup(
     },
   };
 
+  const metrics = new IndexerMetrics();
   const loop = new IngestionLoop({
     chain,
     heads,
     store,
+    metrics,
     settings: SETTINGS,
     logger: {
       info: (fields, message) => logs.push({ level: 'info', fields, message }),
@@ -167,6 +170,15 @@ function setup(
     beats: () => beats,
     ranges: () => calls.filter((call) => call.kind === 'fetch').map((c) => [c.from, c.to]),
     checkpoint: () => row,
+    /** The whole scrape text. */
+    scrape: () => metrics.registry.metrics(),
+    /** The current value of one metric series. */
+    metric: async (name: string, labels: Record<string, string> = {}) => {
+      const values = (await metrics.registry.getSingleMetric(name)?.get())?.values ?? [];
+      return values.find((value) =>
+        Object.entries(labels).every(([key, label]) => value.labels[key] === label),
+      )?.value;
+    },
   };
 }
 
@@ -405,6 +417,7 @@ describe('IngestionLoop', () => {
         rewind: () => Promise.reject(new Error('used')),
       },
       settings: SETTINGS,
+      metrics: new IndexerMetrics(),
       logger: { info: () => undefined, warn: () => undefined },
       heartbeat: { beat: () => undefined },
       redact: (err) => err,
@@ -412,5 +425,67 @@ describe('IngestionLoop', () => {
     });
     await loop.run(controller.signal);
     expect(t.calls).toEqual([]);
+  });
+
+  describe('metrics', () => {
+    const ok = { result: 'ok' };
+    const error = { result: 'error' };
+
+    it('records each committed batch, the rows, the time, the checkpoint and the batch size', async () => {
+      const t = setup({ head: 30n });
+      await t.run();
+
+      // Three ranges (10–17, 18–25, 26–30), one row each in this fake chain.
+      expect(await t.metric('gapless_indexer_batches_total', ok)).toBe(3);
+      expect(await t.metric('gapless_indexer_batches_total', error)).toBe(0);
+      expect(await t.metric('gapless_indexer_events_indexed_total')).toBe(3);
+      expect(await t.metric('gapless_indexer_processed_block')).toBe(30);
+      expect(await t.metric('gapless_indexer_batch_size_blocks')).toBe(8);
+      expect(await t.scrape()).toContain('gapless_indexer_batch_duration_seconds_count 3');
+    });
+
+    it('counts a rejected range as a failed batch and shows the smaller batch size', async () => {
+      const tooBig = new TimeoutError({ body: {}, url: 'http://rpc.local' });
+      const t = setup({ head: 17n, failures: [tooBig, tooBig] });
+      await t.run();
+
+      expect(await t.metric('gapless_indexer_batches_total', error)).toBe(2);
+      expect(await t.metric('gapless_indexer_batches_total', ok)).toBe(4);
+      expect(await t.metric('gapless_indexer_batch_size_blocks')).toBe(2);
+    });
+
+    it('counts a transient error as a failed batch', async () => {
+      const t = setup({
+        head: 17n,
+        failures: [new RangeInconsistentError('node is behind')],
+        maxWaits: 5,
+      });
+      await t.run();
+      expect(await t.metric('gapless_indexer_batches_total', error)).toBe(1);
+      expect(await t.metric('gapless_indexer_batches_total', ok)).toBe(1);
+    });
+
+    it('counts a reorg once, and shows the rewound checkpoint before indexing again', async () => {
+      const t = setup({
+        head: 24n,
+        stored: { lastBlock: 20n, lastBlockHash: hash(20n), headBlock: 20n },
+        storedBlocks: [11n, 14n, 18n],
+        forked: (block) => block > 14n,
+      });
+      await t.run();
+
+      expect(await t.metric('gapless_indexer_reorgs_total')).toBe(1);
+      // The range 21–24 found the reorg; 15–22 and 23–24 committed.
+      expect(await t.metric('gapless_indexer_batches_total', error)).toBe(1);
+      expect(await t.metric('gapless_indexer_batches_total', ok)).toBe(2);
+      expect(await t.metric('gapless_indexer_processed_block')).toBe(24);
+    });
+
+    it('does not count a lost lock or a shutdown as a failed batch', async () => {
+      const t = setup({ head: 17n, failures: [LOST] });
+      await t.run();
+      expect(await t.metric('gapless_indexer_batches_total', error)).toBe(0);
+      expect(await t.metric('gapless_indexer_batches_total', ok)).toBe(0);
+    });
   });
 });

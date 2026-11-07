@@ -139,7 +139,7 @@ Part of every batch request (the anchor, see "RPC consistency checks"):
   - Record the heartbeat on **every loop step that proves the process is working**: each loop cycle, **each retry attempt** (one cycle can retry for minutes during an RPC outage), and **each leader-wait attempt** (a process that isn't leader never runs the loop). Ticking only once per loop cycle would restart a healthy pod during an RPC outage.
 - **Readiness `/readyz`:** the process is the leader and the DB is reachable.
 - **Lag is a metric and an alert, never a probe.**
-- Both endpoints are served by a small `node:http` server (`HealthServer` in `packages/observability`, shared with the API) on `METRICS_PORT`, not by a Nest HTTP adapter. Phase 6 adds `GET /metrics` to the same server. The bodies are fixed (`{"status":"ok"}` or `{"status":"unavailable"}`), so an error text can never leak. The DB check for readiness is `select 1` with a 2 s limit.
+- Both endpoints are served by a small `node:http` server (`HealthServer` in `packages/observability`, shared with the API) on `METRICS_PORT`, not by a Nest HTTP adapter. The same server serves `GET /metrics` (docs/09). The bodies are fixed (`{"status":"ok"}` or `{"status":"unavailable"}`), so an error text can never leak. The DB check for readiness is `select 1` with a 2 s limit.
 
 ## Known trade-offs
 

@@ -17,6 +17,7 @@ function fastWait(waits: number[]) {
 function build(sources: HeadSources, pollIntervalMs = 1000) {
   const lines: Line[] = [];
   const waits: number[] = [];
+  const changes: bigint[] = [];
   const tracker = new HeadTracker({
     sources,
     pollIntervalMs,
@@ -27,8 +28,9 @@ function build(sources: HeadSources, pollIntervalMs = 1000) {
     redact: (err) => (err instanceof Error ? `redacted: ${err.message}` : err),
     wait: fastWait(waits),
     random: () => 0.5,
+    onHeadChange: (head) => changes.push(head),
   });
-  return { tracker, lines, waits };
+  return { tracker, lines, waits, changes };
 }
 
 /** A fake WS source: the test pushes heads and kills the socket. */
@@ -93,6 +95,18 @@ describe('HeadTracker', () => {
     socket.push(42n);
     await woke;
     expect(tracker.latest()).toBe(42n);
+  });
+
+  it('reports each head change once, from both sources (the head_block gauge)', async () => {
+    const socket = fakeSocket();
+    const { tracker, changes } = build({ pollHead: () => Promise.resolve(5n), ...socket }, 60_000);
+    started(tracker);
+    await vi.waitFor(() => expect(socket.stats.connects).toBe(1));
+    await vi.waitFor(() => expect(tracker.latest()).toBe(5n));
+
+    socket.push(5n); // the same head again: no change
+    socket.push(6n);
+    expect(changes).toEqual([5n, 6n]);
   });
 
   it('resolves at once for a change that came before the wait started', async () => {

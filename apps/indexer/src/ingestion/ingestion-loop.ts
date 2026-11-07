@@ -55,6 +55,15 @@ export type LoopLogger = {
   readonly warn: (fields: Record<string, unknown>, message: string) => void;
 };
 
+/** What the loop reports. `IndexerMetrics` implements it (docs/09 "Indexer metrics"). */
+export type LoopMetrics = {
+  readonly recordCheckpoint: (lastBlock: bigint) => void;
+  readonly recordBatchIndexed: (inserted: number, durationSeconds: number) => void;
+  readonly recordBatchFailed: () => void;
+  readonly recordBatchSize: (blocks: bigint) => void;
+  readonly recordReorg: () => void;
+};
+
 export type LoopSettings = {
   readonly chainId: number;
   /** Lowercase, for the error message only. */
@@ -71,6 +80,7 @@ export type IngestionLoopDeps = {
   readonly heads: HeadSource;
   readonly store: CheckpointStore;
   readonly logger: LoopLogger;
+  readonly metrics: LoopMetrics;
   readonly settings: LoopSettings;
   /** The liveness heartbeat (docs/03 "Health"): beaten on every cycle and every retry. */
   readonly heartbeat: { readonly beat: () => void };
@@ -118,7 +128,8 @@ export class IngestionLoop {
 
   /** Runs until `signal` aborts (resolves) or a fatal error (rejects). */
   async run(signal: AbortSignal): Promise<void> {
-    const { chain, heads, store, logger, settings, heartbeat, redact, wait, random } = this.deps;
+    const { chain, heads, store, logger, metrics, settings, heartbeat, redact, wait, random } =
+      this.deps;
     const chainId = settings.chainId;
     let checkpoint: Checkpoint | undefined;
     let batch = initialBatchSize(settings.batchSize);
@@ -126,10 +137,15 @@ export class IngestionLoop {
 
     while (!signal.aborted) {
       heartbeat.beat();
+      // Every change of the batch size goes back to the top of the loop, so this sees them all.
+      metrics.recordBatchSize(batch.size);
       let range: BlockRange | undefined;
       let fetching = false;
       try {
-        checkpoint ??= await this.start();
+        if (checkpoint === undefined) {
+          checkpoint = await this.start();
+          metrics.recordCheckpoint(checkpoint.lastBlock);
+        }
         const seen = heads.version();
         const head = heads.latest();
         range =
@@ -165,6 +181,9 @@ export class IngestionLoop {
           headBlock: head,
         });
         checkpoint = result.checkpoint;
+        const durationMs = performance.now() - started;
+        metrics.recordCheckpoint(checkpoint.lastBlock);
+        metrics.recordBatchIndexed(result.inserted, durationMs / 1000);
         batch = afterSuccess(batch);
         attempt = 0;
         logger.info(
@@ -174,7 +193,7 @@ export class IngestionLoop {
             transfers: fetched.rows.length,
             inserted: result.inserted,
             batchSize: batch.size.toString(),
-            durationMs: Math.round(performance.now() - started),
+            durationMs: Math.round(durationMs),
           },
           'batch indexed',
         );
@@ -183,10 +202,15 @@ export class IngestionLoop {
         if (isFatal(err)) throw err;
         // Lost leadership or shutdown: the supervisor logs it. Nothing was committed.
         if (signal.aborted) return;
+        // A planned range that did not commit. An error before planning (the start step) is
+        // not a batch; it shows in the logs and in a flat processed_block.
+        if (range !== undefined) metrics.recordBatchFailed();
 
         if (err instanceof AnchorMismatchError && checkpoint !== undefined) {
           try {
             checkpoint = await this.rewind(checkpoint, err);
+            metrics.recordReorg();
+            metrics.recordCheckpoint(checkpoint.lastBlock);
             attempt = 0;
             continue;
           } catch (rewindErr) {

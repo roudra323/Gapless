@@ -5,13 +5,22 @@
 export class Heartbeat {
   private last: number;
 
-  constructor(private readonly now: () => number = Date.now) {
+  /**
+   * @param now the clock (tests pass a fixed one).
+   * @param onBeat called with the time of every beat (the `last_tick` gauge, docs/09).
+   */
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly onBeat: (atMs: number) => void = () => undefined,
+  ) {
     // Boot counts as a beat, so the process is live while it starts.
     this.last = now();
+    onBeat(this.last);
   }
 
   beat(): void {
     this.last = this.now();
+    this.onBeat(this.last);
   }
 
   /** Epoch milliseconds of the last beat. */

@@ -32,6 +32,8 @@ export type HeadTrackerDeps = {
   /** Resolves after `ms`, or as soon as `signal` aborts. Never rejects. */
   readonly wait: (ms: number, signal: AbortSignal) => Promise<void>;
   readonly random?: () => number;
+  /** Called on every head change, from either source (the `head_block` gauge, docs/09). */
+  readonly onHeadChange?: (head: bigint) => void;
 };
 
 /**
@@ -108,6 +110,7 @@ export class HeadTracker {
     if (block === this.head) return;
     this.head = block;
     this.changes += 1;
+    this.deps.onHeadChange?.(block);
     // Each wake removes itself from the set; deleting the current entry is safe during for…of.
     for (const wake of this.waiters) wake();
   }

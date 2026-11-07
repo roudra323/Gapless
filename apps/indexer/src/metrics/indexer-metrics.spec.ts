@@ -31,6 +31,11 @@ function documentedMetrics(): Map<string, DocumentedMetric> {
   return rows;
 }
 
+/** The value of a metric without labels. */
+async function value(metrics: IndexerMetrics, name: string): Promise<number | undefined> {
+  return (await metrics.registry.getSingleMetric(name)?.get())?.values[0]?.value;
+}
+
 describe('IndexerMetrics', () => {
   it('defines exactly the metrics in the docs/09 table, with the same types and labels', async () => {
     const documented = documentedMetrics();
@@ -69,5 +74,48 @@ describe('IndexerMetrics', () => {
     first.reorgs.inc();
     expect(await first.registry.metrics()).toContain('gapless_indexer_reorgs_total 1');
     expect(await second.registry.metrics()).toContain('gapless_indexer_reorgs_total 0');
+  });
+
+  describe('record methods', () => {
+    it('keeps the lag equal to head minus processed, whichever value changes', async () => {
+      const metrics = new IndexerMetrics();
+      metrics.recordHead(100n);
+      // A standby sees heads but has no checkpoint: no lag to report.
+      expect(await value(metrics, 'gapless_indexer_lag_blocks')).toBe(0);
+
+      metrics.recordCheckpoint(90n);
+      expect(await value(metrics, 'gapless_indexer_lag_blocks')).toBe(10);
+      metrics.recordHead(105n);
+      expect(await value(metrics, 'gapless_indexer_lag_blocks')).toBe(15);
+      metrics.recordCheckpoint(105n);
+      expect(await value(metrics, 'gapless_indexer_lag_blocks')).toBe(0);
+      expect(await value(metrics, 'gapless_indexer_head_block')).toBe(105);
+      expect(await value(metrics, 'gapless_indexer_processed_block')).toBe(105);
+    });
+
+    it('never reports a negative lag', async () => {
+      const metrics = new IndexerMetrics();
+      metrics.recordCheckpoint(50n);
+      metrics.recordHead(40n);
+      expect(await value(metrics, 'gapless_indexer_lag_blocks')).toBe(0);
+    });
+
+    it('reports the leader flag as 1 or 0, and the tick in seconds', async () => {
+      const metrics = new IndexerMetrics();
+      metrics.recordLeader(true);
+      expect(await value(metrics, 'gapless_indexer_is_leader')).toBe(1);
+      metrics.recordLeader(false);
+      expect(await value(metrics, 'gapless_indexer_is_leader')).toBe(0);
+      metrics.recordTick(1_762_600_000_500);
+      expect(await value(metrics, 'gapless_indexer_last_tick_timestamp_seconds')).toBe(
+        1_762_600_000.5,
+      );
+    });
+
+    it('keeps a block number up to 2^53 - 1 exact', async () => {
+      const metrics = new IndexerMetrics();
+      metrics.recordHead(9_007_199_254_740_991n); // Number.MAX_SAFE_INTEGER
+      expect(await value(metrics, 'gapless_indexer_head_block')).toBe(Number.MAX_SAFE_INTEGER);
+    });
   });
 });

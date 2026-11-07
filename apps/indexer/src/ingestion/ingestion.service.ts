@@ -18,6 +18,7 @@ import { Heartbeat } from '../health/heartbeat.js';
 import { LeaderLock } from '../leader/leader-lock.js';
 import { LeaderStatus } from '../leader/leader-status.js';
 import { advisoryLockKey } from '../leader/lock-key.js';
+import { IndexerMetrics } from '../metrics/indexer-metrics.js';
 import { fetchRange } from './batch-fetcher.js';
 import { IndexerRepository } from './indexer.repository.js';
 import { IndexerSupervisor } from './indexer-supervisor.js';
@@ -54,6 +55,7 @@ export class IngestionService implements BeforeApplicationShutdown, OnApplicatio
     @Inject(DB_HANDLE) private readonly db: DbHandle,
     private readonly heartbeat: Heartbeat,
     private readonly leaderStatus: LeaderStatus,
+    private readonly metrics: IndexerMetrics,
   ) {
     logger.setContext(IngestionService.name);
   }
@@ -100,6 +102,7 @@ export class IngestionService implements BeforeApplicationShutdown, OnApplicatio
       logger: log,
       redact,
       wait,
+      onHeadChange: (head) => this.metrics.recordHead(head),
     });
 
     const getHeader = async (block: bigint) =>
@@ -126,6 +129,7 @@ export class IngestionService implements BeforeApplicationShutdown, OnApplicatio
           // Every write runs in the session that holds the lock (docs/03 "Leader").
           store: new IndexerRepository(session.db, config.CHAIN_ID, tokenAddress),
           logger: log,
+          metrics: this.metrics,
           settings: {
             chainId: config.CHAIN_ID,
             tokenAddress,

@@ -11,6 +11,16 @@
 
 Defined in one place, `apps/indexer/src/metrics/indexer-metrics.ts` (the `IndexerMetrics` provider), and served on the indexer's `/metrics`. `indexer-metrics.spec.ts` reads this table and fails if a name, type or label set differs from the code. Histogram buckets: batch duration `0.05 … 30` s, RPC duration `0.01 … 10` s (the RPC timeout). The batch outcomes start at 0 for both `result` values, so the first error shows as an increase.
 
+Where the values come from (the code calls the `record*` methods of `IndexerMetrics`, never a metric by name):
+
+- `head_block`: every head change in `HeadTracker` (poll or WebSocket), on the leader and on a standby. It doesn't depend on the database, so `IndexerStalled` still fires when the DB is down.
+- `processed_block`: the checkpoint the loop read at the start of a term, committed, or rewound to.
+- `lag_blocks`: head − processed, updated when either changes, never below 0. A standby has no checkpoint and reports 0.
+- `batches_total`: one per planned range. `ok` when it committed; `error` when it didn't (range rejected by the RPC, reorg found, RPC or DB error). A shutdown or a lost lock counts as neither, and a failure before a range is planned (the start step) isn't a batch.
+- `events_indexed_total` and `batch_duration_seconds`: on each committed batch (fetch + write time).
+- `batch_size_blocks`: at the top of every loop cycle. `reorgs_total`: after each finished rewind.
+- `is_leader` and `last_tick_timestamp_seconds`: from the same `LeaderStatus` and `Heartbeat` objects that `/readyz` and `/healthz` read, so a gauge and a probe can't disagree.
+
 | Metric                                        | Type      | Labels                                                                         | Meaning                             |
 | --------------------------------------------- | --------- | ------------------------------------------------------------------------------ | ----------------------------------- |
 | `gapless_indexer_head_block`                  | gauge     | —                                                                              | latest chain head seen              |

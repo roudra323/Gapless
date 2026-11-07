@@ -132,4 +132,68 @@ export class IndexerMetrics {
     // of a series that appears out of nothing.
     for (const result of ['ok', 'error'] satisfies BatchResult[]) this.batches.inc({ result }, 0);
   }
+
+  // The `record*` methods below are what the rest of the indexer calls. They keep the rules
+  // (what "lag" is, what a failed batch is) in one place, and the callers never touch a name.
+  // Prometheus values are float64: a block number converts exactly up to 2^53, far above any
+  // chain height. This is the only place block numbers leave `bigint` (docs/05 "boundaries").
+
+  private head: bigint | undefined;
+  private processed: bigint | undefined;
+
+  /** A new chain head (from `HeadTracker`, on the leader and on a standby). */
+  recordHead(head: bigint): void {
+    this.head = head;
+    this.headBlock.set(Number(head));
+    this.updateLag();
+  }
+
+  /** The checkpoint the leader read, committed or rewound to. */
+  recordCheckpoint(lastBlock: bigint): void {
+    this.processed = lastBlock;
+    this.processedBlock.set(Number(lastBlock));
+    this.updateLag();
+  }
+
+  /** One planned range fetched and committed. */
+  recordBatchIndexed(inserted: number, durationSeconds: number): void {
+    this.batches.inc({ result: 'ok' });
+    this.eventsIndexed.inc(inserted);
+    this.batchDuration.observe(durationSeconds);
+  }
+
+  /**
+   * One planned range that did not commit: the RPC refused it, a reorg was found, or an RPC or
+   * database call failed. A shutdown or a lost lock is not a failed batch.
+   */
+  recordBatchFailed(): void {
+    this.batches.inc({ result: 'error' });
+  }
+
+  recordBatchSize(blocks: bigint): void {
+    this.batchSizeBlocks.set(Number(blocks));
+  }
+
+  /** One rewind after a reorg, done. */
+  recordReorg(): void {
+    this.reorgs.inc();
+  }
+
+  recordLeader(isLeader: boolean): void {
+    this.isLeader.set(isLeader ? 1 : 0);
+  }
+
+  /** A heartbeat at `atMs` (epoch milliseconds). */
+  recordTick(atMs: number): void {
+    this.lastTick.set(atMs / 1000);
+  }
+
+  /**
+   * Head minus processed, never below 0 (a rewind or a fresh seed can put the checkpoint above
+   * the head seen so far). Only the leader knows both values, so a standby keeps 0.
+   */
+  private updateLag(): void {
+    if (this.head === undefined || this.processed === undefined) return;
+    this.lagBlocks.set(this.head > this.processed ? Number(this.head - this.processed) : 0);
+  }
 }
