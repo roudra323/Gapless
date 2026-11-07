@@ -43,7 +43,7 @@ Every phase should move toward making this demo work.
 
 Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N passes.**
 
-**Current status:** **Phase 5 done (2026-11-05).** Next: Phase 6 (observability in code). Update this line when a phase passes.
+**Current status:** **Phase 6 done (2026-11-08).** Next: Phase 7 (containers). Update this line when a phase passes.
 
 ### Phase 0 — Repo foundation
 
@@ -84,7 +84,8 @@ Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N 
 ### Phase 6 — Observability in code
 
 - Prometheus metrics with `@prometheus-io/client` (the exact names in `docs/09`). Structured logs are already in place from Phase 3.
-- Indexer instrumentation only, no new logic: `GET /metrics` on the existing `node:http` health server, the `ws_connected` gauge with the WebSocket stall rule (`docs/03` "HeadTracker"), and the metric assertions in the chaos tests that today check log lines (`docs/06`).
+- Indexer instrumentation, no new indexing logic: `GET /metrics` on the existing `node:http` health server, the `ws_connected` gauge with the WebSocket stall rule (`docs/03` "HeadTracker", `BLOCK_TIME_MS`), the RPC metrics, and metric assertions in the chaos tests instead of log lines (`docs/06`).
+- API instrumentation: the HTTP and DB query metrics of `docs/09` "API metrics", on the API's `/metrics`.
 - ✅ Done when `/metrics` exposes every documented metric.
 
 ### Phase 7 — Containers

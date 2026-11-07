@@ -109,7 +109,7 @@ const appConfigSchema = migrateConfigSchema.extend(chainConfigSchema.shape).exte
   /** Must be less than the pod's `terminationGracePeriodSeconds` (docs/03 "Graceful shutdown"). */
   SHUTDOWN_TIMEOUT_MS: intAtLeast(100).default(20_000),
   /**
-   * The internal port for `/healthz` and `/readyz` (and `/metrics` from Phase 6). Never routed by
+   * The internal port for `/healthz`, `/readyz` and `/metrics`. Never routed by
    * the Gateway (docs/02 "Ports").
    */
   METRICS_PORT: port.default(9464),

@@ -23,11 +23,12 @@ So a dropped socket can never cause a gap. There's nothing to "replay", because 
 - Keeps `latestHead: bigint` and exposes `waitForChange(signal)`.
 - **WS source:** an `eth_subscribe("newHeads")` subscription over a viem `webSocket` transport (`subscribeNewHeads` in `packages/chain`). On each head, update `latestHead` and wake the loop.
 - **Poll source:** every `POLL_INTERVAL_MS`, call `getBlockNumber()` over HTTP. This **always runs**, even when the WebSocket is healthy. It's cheap and guarantees progress.
-- Sets metrics `gapless_indexer_ws_connected` and `gapless_indexer_ws_reconnects_total` (Phase 6). If socket state isn't directly observable, treat the WebSocket as disconnected when no WS head has arrived for more than `3 × expected block time`.
+- Sets `gapless_indexer_ws_connected` (1 while a subscription is up; 0 before the first one, after a loss, a failed connect or a stall, on stop, and always in poll-only mode) and `gapless_indexer_ws_reconnects_total` (+1 for each subscribe attempt after the first).
+- **Stall rule:** a socket can stay open but deliver nothing (a half-open connection, a stuck provider). When the poll has seen a head that the socket has not delivered for more than `3 × BLOCK_TIME_MS`, the tracker logs `ws head feed stalled, reconnecting`, sets `ws_connected` to 0, closes the socket and subscribes again with `backoffDelay`. The clock starts only when the poll is **ahead** of the socket, so a quiet chain (a local anvil mines only on demand) never trips it. A socket that connects before the first poll starts from the poll's head.
+- **Subscribe timeout:** opening the socket and `eth_subscribe` together must finish within the RPC timeout (10 s), or `subscribeNewHeads` throws `WebSocketSubscribeTimeoutError`. viem has no timeout for either, so on a network that drops packets the subscribe would wait forever: no reconnect, and a shutdown that hangs.
 - If `RPC_WS_URL` is unset, it runs poll-only. That's a valid production mode.
 - **Our code owns the reconnect.** `subscribeNewHeads` (`packages/chain`) turns viem's own reconnect off (`reconnect: false`, `retryCount: 0`), and `HeadTracker` subscribes again after `backoffDelay` when the socket dies, forever. viem's default would bypass the retry policy below and give up after 5 attempts.
 - `waitForChange` takes the version seen before planning, so a head that arrives between the plan and the wait still wakes the loop at once.
-- The "no WS head for 3 × block time" stall rule arrives with the `ws_connected` gauge in Phase 6. A local anvil mines only on demand, so a healthy socket can be silent for a long time.
 
 ### Leader (`leader/`)
 

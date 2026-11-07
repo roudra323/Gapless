@@ -20,6 +20,8 @@ Where the values come from (the code calls the `record*` methods of `IndexerMetr
 - `events_indexed_total` and `batch_duration_seconds`: on each committed batch (fetch + write time).
 - `batch_size_blocks`: at the top of every loop cycle. `reorgs_total`: after each finished rewind.
 - `is_leader` and `last_tick_timestamp_seconds`: from the same `LeaderStatus` and `Heartbeat` objects that `/readyz` and `/healthz` read, so a gauge and a probe can't disagree.
+- `ws_connected` and `ws_reconnects_total`: from `HeadTracker` (docs/03 "HeadTracker", including the stall rule). Poll-only mode (no `RPC_WS_URL`) reports `ws_connected = 0`; `IndexerWsDown` is `info` only, so that is not paged.
+- `rpc_requests_total` and `rpc_request_duration_seconds`: the `onCall` observer of `createRpcClient` and `subscribeNewHeads` (packages/chain) reports every JSON-RPC call. A call inside a JSON-RPC batch counts once, with its own method, and its time includes the wait for the whole batch. `rate_limited` = HTTP 429 or a rate-limit JSON-RPC error (`isRateLimited`); every other failure (including a timeout) is `error`. `method` is one of the indexer's own calls (`eth_blockNumber`, `eth_getBlockByNumber`, `eth_getLogs`, `eth_getCode`, `eth_subscribe`).
 
 | Metric                                        | Type      | Labels                                                                         | Meaning                             |
 | --------------------------------------------- | --------- | ------------------------------------------------------------------------------ | ----------------------------------- |
@@ -39,6 +41,11 @@ Where the values come from (the code calls the `record*` methods of `IndexerMetr
 | `gapless_rpc_request_duration_seconds`        | histogram | `method`, `transport`                                                          |                                     |
 
 ### API metrics
+
+Defined in `apps/api/src/metrics/api-metrics.ts` (the `ApiMetrics` provider) and served on the API's `/metrics` on `METRICS_PORT`. `api-metrics.spec.ts` checks this table against the code.
+
+- `http_requests_total` and `http_request_duration_seconds`: `HttpMetricsMiddleware`, on every request on the public port, when the response closes. `route` is the Express route template, or `unmatched` for a request no controller matched (a 404), so a scanned URL can't create a series. Probes and `/metrics` are on `METRICS_PORT`, outside Nest, and are not counted.
+- `db_query_duration_seconds`: `ApiMetrics.timeQuery` around each repository read, also when it fails. `query` is one of `recent_transfers`, `address_transfers` (both sides of `direction=all` together), `stats`.
 
 | Metric                                  | Type      | Labels                                                |
 | --------------------------------------- | --------- | ----------------------------------------------------- |
