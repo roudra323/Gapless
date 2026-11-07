@@ -83,7 +83,7 @@ Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N 
 
 ### Phase 6 — Observability in code
 
-- prom-client metrics (the exact names in `docs/09`). Structured logs are already in place from Phase 3.
+- Prometheus metrics with `@prometheus-io/client` (the exact names in `docs/09`). Structured logs are already in place from Phase 3.
 - Indexer instrumentation only, no new logic: `GET /metrics` on the existing `node:http` health server, the `ws_connected` gauge with the WebSocket stall rule (`docs/03` "HeadTracker"), and the metric assertions in the chaos tests that today check log lines (`docs/06`).
 - ✅ Done when `/metrics` exposes every documented metric.
 

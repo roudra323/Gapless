@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import type { MetricsSource } from './metrics.js';
+
 /** The two checks a process gives to {@link HealthServer}. */
 export type HealthChecks = {
   /** Liveness (`/healthz`): synchronous, so a busy database can't make it fail. */
@@ -10,17 +12,25 @@ export type HealthChecks = {
 };
 
 /**
- * The internal health endpoints on `METRICS_PORT` (docs/02 "Ports", docs/03 "Health"), on
- * `node:http` with no framework. The indexer and the API both use it, so their probes behave the
- * same. Phase 6 adds `GET /metrics` to the same server.
+ * The internal endpoints on `METRICS_PORT` (docs/02 "Ports", docs/03 "Health", docs/09
+ * "Metrics"), on `node:http` with no framework: `/healthz`, `/readyz` and, when a metrics source
+ * is given, `/metrics`. The indexer and the API both use it, so their probes and scrapes behave
+ * the same.
  *
- * The bodies are fixed (`{"status":"ok"}` or `{"status":"unavailable"}`): an error text could
- * hold a secret, and a probe only reads the status code.
+ * The health bodies are fixed (`{"status":"ok"}` or `{"status":"unavailable"}`): an error text
+ * could hold a secret, and a probe only reads the status code.
  */
 export class HealthServer {
   private readonly server: Server;
 
-  constructor(private readonly checks: HealthChecks) {
+  /**
+   * @param checks liveness and readiness.
+   * @param metrics the process's metrics registry. Without it, `/metrics` is 404.
+   */
+  constructor(
+    private readonly checks: HealthChecks,
+    private readonly metrics?: MetricsSource,
+  ) {
     this.server = createServer((req, res) => {
       void this.handle(req, res);
     });
@@ -54,6 +64,10 @@ export class HealthServer {
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+    if (req.method === 'GET' && path === '/metrics' && this.metrics) {
+      await this.sendMetrics(res, this.metrics);
+      return;
+    }
     if (req.method !== 'GET' || (path !== '/healthz' && path !== '/readyz')) {
       send(res, 404, { status: 'not found' });
       return;
@@ -65,6 +79,20 @@ export class HealthServer {
       ok = false;
     }
     send(res, ok ? 200 : 503, { status: ok ? 'ok' : 'unavailable' });
+  }
+
+  private async sendMetrics(res: ServerResponse, source: MetricsSource): Promise<void> {
+    let body: string;
+    try {
+      body = await source.metrics();
+    } catch {
+      // A failed collect is a 500 for this scrape only; Prometheus marks the scrape failed
+      // (`up == 0`) and tries again at the next interval. Fixed body, as for the probes.
+      send(res, 500, { status: 'metrics unavailable' });
+      return;
+    }
+    res.writeHead(200, { 'content-type': source.contentType, 'cache-control': 'no-store' });
+    res.end(body);
   }
 }
 

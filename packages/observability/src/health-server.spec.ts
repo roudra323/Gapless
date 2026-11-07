@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { type HealthChecks, HealthServer } from './health-server.js';
+import type { MetricsSource } from './metrics.js';
 
 let server: HealthServer | undefined;
 
@@ -9,8 +10,8 @@ afterEach(async () => {
   server = undefined;
 });
 
-async function start(checks: HealthChecks): Promise<string> {
-  server = new HealthServer(checks);
+async function start(checks: HealthChecks, metrics?: MetricsSource): Promise<string> {
+  server = new HealthServer(checks, metrics);
   const port = await server.listen(0, '127.0.0.1');
   return `http://127.0.0.1:${port}`;
 }
@@ -57,14 +58,46 @@ describe('HealthServer', () => {
     expect((await fetch(`${base}/readyz`)).status).toBe(503);
   });
 
-  it('answers 404 for other paths and methods', async () => {
+  it('answers 404 for other paths and methods, and for /metrics without a source', async () => {
     const base = await start({ live: () => true, ready: () => Promise.resolve(true) });
     expect((await fetch(`${base}/metrics`)).status).toBe(404);
+    expect((await fetch(`${base}/nope`)).status).toBe(404);
     expect((await fetch(`${base}/healthz`, { method: 'POST' })).status).toBe(404);
   });
 
   it('ignores the query string', async () => {
     const base = await start({ live: () => true, ready: () => Promise.resolve(true) });
     expect((await fetch(`${base}/healthz?probe=1`)).status).toBe(200);
+  });
+
+  describe('/metrics', () => {
+    const LIVE = { live: () => true, ready: () => Promise.resolve(true) };
+
+    it('serves the source body with its content type', async () => {
+      const source: MetricsSource = {
+        contentType: 'text/plain; version=0.0.4; charset=utf-8',
+        metrics: () => Promise.resolve('gapless_test_total 1\n'),
+      };
+      const base = await start(LIVE, source);
+
+      const res = await fetch(`${base}/metrics`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('text/plain; version=0.0.4; charset=utf-8');
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(await res.text()).toBe('gapless_test_total 1\n');
+      expect((await fetch(`${base}/metrics`, { method: 'POST' })).status).toBe(404);
+    });
+
+    it('answers 500 with a fixed body when collecting fails, and keeps serving probes', async () => {
+      const base = await start(LIVE, {
+        contentType: 'text/plain',
+        metrics: () => Promise.reject(new Error('postgres://user:hunter2@db')),
+      });
+
+      const res = await fetch(`${base}/metrics`);
+      expect(res.status).toBe(500);
+      expect(await res.text()).not.toContain('hunter2');
+      expect((await fetch(`${base}/healthz`)).status).toBe(200);
+    });
   });
 });

@@ -21,6 +21,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@prometheus-io/client": "0.16.1",
     "pino": "10.4.0"
   }
 }

@@ -2,7 +2,7 @@
 
 ## Metrics
 
-- Library: `prom-client`. One `Registry` per process, created in `packages/observability`, plus `collectDefaultMetrics()` (process and Node runtime metrics).
+- Library: `@prometheus-io/client` (formerly `prom-client`). One `Registry` per process, created with `createMetricsRegistry()` from `packages/observability`, which adds `collectDefaultMetrics()` (process and Node runtime metrics: CPU, memory, event loop lag, GC). Apps import `Counter`, `Gauge` and `Histogram` from `@gapless/observability`, not from the library, so there is one copy of it.
 - Served at `GET /metrics` on `METRICS_PORT` (9464), **never** through the Gateway.
 - Naming: `gapless_<area>_<name>_<unit>`. Counters end in `_total`, durations are in `_seconds`, and sizes in `_bytes`.
 - **Label cardinality rule:** labels must have small, bounded value sets. Never use an address, a tx hash, a block number, or a raw URL path as a label. HTTP routes use the **route template** (`/v1/addresses/:address/transfers`).
