@@ -13,7 +13,8 @@ One Dockerfile per app (`apps/<app>/Dockerfile`), with the build context at the 
 - **Non-root:** UID 65532 (distroless `nonroot`) or `node`. The root filesystem must work read-only (write nothing to disk; use `/tmp` via `emptyDir` only if unavoidable).
 - `CMD ["node", "dist/main.js"]` in exec form, so Node receives SIGTERM directly. The indexer image also contains the `@gapless/db` migrate entrypoint (`dist/bin/migrate.js`, with its `migrations/` folder) for the migration Job.
 - OCI labels: `org.opencontainers.image.source`, `.revision` (Git SHA), `.created`.
-- A `.dockerignore` excludes `node_modules`, `.git`, `dist`, `.env*`, `infra`, and `deploy`.
+- A `.dockerignore` excludes `node_modules` and `dist` at every depth, `.git`, `.env*`, `infra`, `deploy`, and `contracts`.
+- Apps have `"files": ["dist"]` in `package.json`, so `pnpm deploy` copies only the build output (the `packages/*` list their own `files`).
 - **Size budget:** each runtime image under 200 MB. Report the size in the PR if it grows.
 
 ### docker-compose.yml (local dev)

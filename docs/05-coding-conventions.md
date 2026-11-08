@@ -90,7 +90,7 @@ These are rules. If one blocks you, raise it. Don't work around it.
 ## Dependencies
 
 - Check `docs/04` first. Use exact versions. Workspace packages use `workspace:*`.
-- Every `package.json` has `"type": "module"` and `engines.node`. Packages in `packages/*` also have an `exports` map and build declarations. Apps have neither: nothing imports an app, and Node runs its `dist/main.js` directly.
+- Every `package.json` has `"type": "module"` and `engines.node`. Packages in `packages/*` also have an `exports` map and build declarations. Apps have neither: nothing imports an app, and Node runs its `dist/main.js` directly. Apps do have `"files": ["dist"]`, so `pnpm deploy` puts only the build output into the image (docs/07).
 
 ## Git
 

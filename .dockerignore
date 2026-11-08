@@ -1,0 +1,11 @@
+# Build context for apps/*/Dockerfile (docs/07 "Docker"). The build installs and compiles inside
+# the image, so local installs and build output must never enter it.
+**/node_modules
+**/dist
+.git
+.env*
+infra
+deploy
+contracts
+coverage
+**/*.log
