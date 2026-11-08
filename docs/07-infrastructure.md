@@ -11,11 +11,11 @@ One Dockerfile per app (`apps/<app>/Dockerfile`), with the build context at the 
   4. `runtime`: copy `/out` only.
 - **Runtime image:** distroless Node (matching the Node major) or `node:24-slim`. Base images are **pinned by digest** and updated by Renovate.
 - **Non-root:** UID 65532 (distroless `nonroot`) or `node`. The root filesystem must work read-only (write nothing to disk; use `/tmp` via `emptyDir` only if unavoidable).
-- `CMD ["node", "dist/main.js"]` in exec form, so Node receives SIGTERM directly. The indexer image also contains the `@gapless/db` migrate entrypoint (`dist/bin/migrate.js`, with its `migrations/` folder) for the migration Job.
+- The distroless base image sets `ENTRYPOINT ["/nodejs/bin/node"]`, so the Dockerfile sets only `CMD ["dist/main.js"]`. This is the exec form, so Node is PID 1 and receives SIGTERM directly. The indexer image also contains the `@gapless/db` migrate entrypoint for the migration Job: `node_modules/@gapless/db/dist/bin/migrate.js`, with its `migrations/` folder.
 - OCI labels: `org.opencontainers.image.source`, `.revision` (Git SHA), `.created`.
 - A `.dockerignore` excludes `node_modules` and `dist` at every depth, `.git`, `.env*`, `infra`, `deploy`, and `contracts`.
 - Apps have `"files": ["dist"]` in `package.json`, so `pnpm deploy` copies only the build output (the `packages/*` list their own `files`).
-- **Size budget:** each runtime image under 200 MB. Report the size in the PR if it grows.
+- **Size budget:** each runtime image under 200 MB compressed (the size a registry stores). Measure it with `docker image inspect --format '{{.Size}}' <image>` (the containerd image store reports the compressed size) or `docker save <image> | gzip -c | wc -c`. Report the size in the PR if it grows.
 
 ### docker-compose.yml (local dev)
 
