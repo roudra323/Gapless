@@ -21,19 +21,21 @@ forge fmt --check
 Start a chain with `pnpm dev:deps` (from the repo root), or run `anvil` directly. anvil prints its funded accounts; account 0's key is public and only for local use. On a public chain, sign with a keystore (`--account <name>`), never a raw key.
 
 ```bash
-# 1. Deploy. The signer becomes the owner. Copy TOKEN_ADDRESS and START_BLOCK into .env.
+# 1. Deploy. The signer becomes the owner. On a fresh anvil it prints TOKEN_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+#    and START_BLOCK=1, the values in .env.example.
 forge script script/DeployMockToken.s.sol:DeployMockToken \
   --rpc-url http://localhost:8545 --broadcast --private-key <anvil account 0 key>
 
 # 2. Mint once, then send TRANSFER_COUNT transfers (default 100) over RECIPIENT_COUNT addresses (default 10).
-TOKEN_ADDRESS=<address> TRANSFER_COUNT=500 forge script script/SpamTransfers.s.sol:SpamTransfers \
+TOKEN_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3 TRANSFER_COUNT=500 forge script script/SpamTransfers.s.sol:SpamTransfers \
   --rpc-url http://localhost:8545 --broadcast --slow --private-key <anvil account 0 key>
 
 # 3. Count the events on chain (TRANSFER_COUNT + 1 mint).
-cast logs --rpc-url http://localhost:8545 --from-block 0 --address <address> \
+cast logs --rpc-url http://localhost:8545 --from-block 0 --address 0x5FbDB2315678afecb367f032d93F642f64180aa3 \
   "Transfer(address indexed,address indexed,uint256)"
 ```
 
+- The token address is fixed on anvil: a contract address depends only on the deployer and its nonce, and the deploy is the first transaction of account 0 (nonce 0) on a fresh chain, so MockToken is always at `0x5FbDB2315678afecb367f032d93F642f64180aa3`. If account 0 sent a transaction before the deploy (for example, a second deploy without restarting anvil), the address changes: use the one the script prints.
 - `START_BLOCK` is the block after the latest block at deploy time. The deploy transaction lands in that block or a later one, so the indexer never starts after the first event, and the value is always at least 1 (see `docs/03` "Startup").
 - `--slow` puts each transfer in its own block. Without it, anvil packs many transfers into a few blocks.
 - Recipients are derived from a fixed seed: no keys exist for them, and every run uses the same addresses.

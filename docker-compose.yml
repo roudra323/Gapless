@@ -31,6 +31,8 @@ services:
   #   docker compose --profile app up -d --build --wait
   # Values come from .env through ${...} interpolation only (no env_file): .env holds host values
   # (localhost:15432, localhost:8545), and the containers reach postgres and anvil by service name.
+  # The TOKEN_ADDRESS default is where anvil account 0 deploys MockToken first (nonce 0) on a fresh
+  # chain (contracts/README.md).
 
   # One-shot: applies the migrations from the indexer image, then exits 0 (the Job in Phase 8).
   migrate:
@@ -61,7 +63,7 @@ services:
       DATABASE_URL: postgres://gapless:gapless@postgres:5432/gapless
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CHAIN_ID: ${CHAIN_ID:-31337}
-      TOKEN_ADDRESS: ${TOKEN_ADDRESS:-}
+      TOKEN_ADDRESS: ${TOKEN_ADDRESS:-0x5FbDB2315678afecb367f032d93F642f64180aa3}
       RPC_HTTP_URL: http://anvil:8545
       RPC_WS_URL: ws://anvil:8545
       START_BLOCK: ${START_BLOCK:-1}
@@ -102,7 +104,7 @@ services:
       DATABASE_URL: postgres://gapless:gapless@postgres:5432/gapless
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CHAIN_ID: ${CHAIN_ID:-31337}
-      TOKEN_ADDRESS: ${TOKEN_ADDRESS:-}
+      TOKEN_ADDRESS: ${TOKEN_ADDRESS:-0x5FbDB2315678afecb367f032d93F642f64180aa3}
     ports:
       - '127.0.0.1:3000:3000'
       # Host 9465, so it does not clash with the indexer's 9464.
