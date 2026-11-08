@@ -21,7 +21,8 @@ One Dockerfile per app (`apps/<app>/Dockerfile`), with the build context at the 
 
 - Default services: `postgres` (18) and `anvil` (the official Foundry image). Both have health checks.
 - Host ports are bound to `127.0.0.1` only: postgres `15432` (non-default, so it doesn't clash with a local install), anvil `8545`. `.env.example` uses these ports.
-- `--profile app` (Phase 7) adds `indexer` and `api` built from the Dockerfiles, for a full-stack smoke test.
+- `--profile app` (Phase 7) adds `migrate`, `indexer` and `api`, built from the Dockerfiles, for a full-stack smoke test: `docker compose --profile app up -d --build --wait`. `migrate` runs once from the indexer image; `indexer` and `api` start only after it exits 0. The app containers use the pod hardening from Kubernetes (read-only root filesystem, all capabilities dropped, `no-new-privileges`) and a `/readyz` health check run by Node (distroless has no shell or curl).
+- The app services take only `TOKEN_ADDRESS`, `START_BLOCK`, `CHAIN_ID`, `CONFIRMATIONS`, `LOG_LEVEL` and `GIT_SHA` from `.env` (Compose interpolation, no `env_file`), because `.env` holds host URLs. The database and RPC URLs use the service names. Host ports: API `3000`, indexer metrics `9464`, API metrics `9465`.
 
 ## Kubernetes manifests (Helm chart: `deploy/helm/gapless`)
 

@@ -27,5 +27,94 @@ services:
       timeout: 3s
       retries: 10
 
+  # --- Profile `app` (Phase 7): the app images, for a full-stack smoke test (docs/07).
+  #   docker compose --profile app up -d --build --wait
+  # Values come from .env through ${...} interpolation only (no env_file): .env holds host values
+  # (localhost:15432, localhost:8545), and the containers reach postgres and anvil by service name.
+
+  # One-shot: applies the migrations from the indexer image, then exits 0 (the Job in Phase 8).
+  migrate:
+    profiles: [app]
+    image: gapless-indexer:local
+    build: &indexer-build
+      context: .
+      dockerfile: apps/indexer/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-local}
+    command: ['node_modules/@gapless/db/dist/bin/migrate.js']
+    environment:
+      DATABASE_URL: postgres://gapless:gapless@postgres:5432/gapless
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    restart: 'no'
+
+  indexer:
+    profiles: [app]
+    image: gapless-indexer:local
+    build: *indexer-build
+    environment:
+      DATABASE_URL: postgres://gapless:gapless@postgres:5432/gapless
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CHAIN_ID: ${CHAIN_ID:-31337}
+      TOKEN_ADDRESS: ${TOKEN_ADDRESS:-}
+      RPC_HTTP_URL: http://anvil:8545
+      RPC_WS_URL: ws://anvil:8545
+      START_BLOCK: ${START_BLOCK:-1}
+      CONFIRMATIONS: ${CONFIRMATIONS:-5}
+    ports:
+      - '127.0.0.1:9464:9464'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      anvil:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    # More than SHUTDOWN_TIMEOUT_MS (20 s), like terminationGracePeriodSeconds: 30 in Kubernetes.
+    stop_grace_period: 30s
+    # Distroless has no shell or curl, so the check uses Node's fetch.
+    healthcheck: &ready-check
+      test:
+        - CMD
+        - /nodejs/bin/node
+        - -e
+        - "fetch('http://127.0.0.1:9464/readyz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  api:
+    profiles: [app]
+    image: gapless-api:local
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-local}
+    environment:
+      DATABASE_URL: postgres://gapless:gapless@postgres:5432/gapless
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CHAIN_ID: ${CHAIN_ID:-31337}
+      TOKEN_ADDRESS: ${TOKEN_ADDRESS:-}
+    ports:
+      - '127.0.0.1:3000:3000'
+      # Host 9465, so it does not clash with the indexer's 9464.
+      - '127.0.0.1:9465:9464'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    stop_grace_period: 30s
+    healthcheck: *ready-check
+
 volumes:
   pgdata:
