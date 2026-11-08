@@ -60,6 +60,8 @@ pnpm verify                  # compare DB vs getLogs for a block range (gaps/dup
 pnpm test:chaos              # build the indexer, then the chaos tests (testcontainers + anvil)
 # Phase 5
 pnpm api:start               # build the API and its packages, then run it (reads .env)
+# Phase 7
+docker compose --profile app up -d --build --wait   # full stack from the images: postgres, anvil, migrate, indexer, api
 # Phase 8
 make kind-up                 # local cluster + gateway + monitoring stack (Prometheus, Grafana, Alertmanager, Loki, Alloy)
 make kind-deploy             # build images, kind load, helm upgrade (local values)
