@@ -1,0 +1,8 @@
+# The app namespace (docs/07 "Pod standards"). Pod Security Admission rejects any Pod in it that
+# breaks the `restricted` profile: root user, privilege escalation, extra capabilities, no seccomp.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gapless
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

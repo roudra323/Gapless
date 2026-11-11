@@ -14,3 +14,8 @@ nodes:
       - containerPort: 30080 # Inside the kind Docker container
         hostPort: 8080 # On your Mac
         listenAddress: 127.0.0.1 # Only your Mac can call it (not Wi-Fi neighbors)
+      # anvil: http://localhost:18545 on the Mac → node port 30545 (deploy/local/anvil.yaml). Not 8545,
+      # so it doesn't clash with the Compose anvil.
+      - containerPort: 30545
+        hostPort: 18545
+        listenAddress: 127.0.0.1

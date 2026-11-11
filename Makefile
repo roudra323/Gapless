@@ -15,7 +15,7 @@ HELM := helm --kube-context $(KUBE_CONTEXT)
 ENVOY_GATEWAY_VERSION := v1.10.0
 
 .PHONY: kind-up
-kind-up: ## Create the local kind cluster, then install the Gateway (safe to run again)
+kind-up: ## Create the kind cluster with the Gateway, Postgres, anvil and the app Secret (safe to rerun)
 	@if kind get clusters 2>/dev/null | grep -qx '$(KIND_CLUSTER)'; then \
 		echo "kind cluster '$(KIND_CLUSTER)' already exists"; \
 	else \
@@ -31,6 +31,17 @@ kind-up: ## Create the local kind cluster, then install the Gateway (safe to run
 		--namespace envoy-gateway-system --create-namespace --set crds.enabled=false --wait
 	$(KUBECTL) apply -f deploy/local/gateway.yaml
 	$(KUBECTL) -n envoy-gateway-system wait gateway/gapless-gateway --for=condition=Programmed --timeout=180s
+	@# The app namespace, then the dev-only Postgres and anvil (never part of the app chart).
+	$(KUBECTL) apply -f deploy/local/namespace.yaml
+	$(KUBECTL) apply -f deploy/local/postgres.yaml -f deploy/local/anvil.yaml
+	$(KUBECTL) -n gapless rollout status deployment/postgres deployment/anvil --timeout=180s
+	@# The app Secret. Local dev values only (the same as docker-compose.yml); on EKS the External
+	@# Secrets Operator fills it from AWS Secrets Manager. `create --dry-run | apply` makes it safe to rerun.
+	$(KUBECTL) -n gapless create secret generic gapless-secrets \
+		--from-literal=DATABASE_URL=postgres://gapless:gapless@postgres:5432/gapless \
+		--from-literal=RPC_HTTP_URL=http://anvil:8545 \
+		--from-literal=RPC_WS_URL=ws://anvil:8545 \
+		--dry-run=client -o yaml | $(KUBECTL) apply -f -
 
 .PHONY: kind-down
 kind-down: ## Delete the local kind cluster and everything in it
