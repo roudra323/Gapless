@@ -63,7 +63,7 @@ One Dockerfile per app (`apps/<app>/Dockerfile`), with the build context at the 
 ## Local cluster (kind): `make kind-up`
 
 1. Create a kind cluster from `deploy/local/kind-config.yaml`, with the node image pinned to the EKS minor version.
-2. Install the Gateway API CRDs (standard channel, pinned version) and **Envoy Gateway** (Helm, pinned), then create the `Gateway`.
+2. Install the Gateway API CRDs (standard channel, the version pinned by the Envoy Gateway CRD chart `gateway-crds-helm`, applied server-side) and **Envoy Gateway** (Helm, pinned, `crds.enabled=false`), then apply `deploy/local/gateway.yaml`: the `Gateway` `gapless-gateway` in `envoy-gateway-system`, which accepts routes only from the `gapless` namespace. Its `EnvoyProxy` makes the proxy a NodePort Service on `30080`, and `kind-config.yaml` maps that to `http://localhost:8080` on the Mac (kind has no cloud load balancer).
 3. Install **kube-prometheus-stack** (pinned chart version, values in `deploy/monitoring/kps-values.yaml`). Set the ServiceMonitor and Rule selectors to pick up our chart's objects. Configure the Alertmanager receiver (one chat webhook, see `docs/09` "Alerts"); the webhook URL comes from a local Secret, never from the repo.
 4. Install **Loki** (single-binary mode, `emptyDir` storage) and **Grafana Alloy** (pinned charts, values in `deploy/monitoring/`), and add Loki as a Grafana data source.
 5. Deploy local Postgres from a simple manifest in `deploy/local/` (official image, single replica). It's dev-only and never part of the app chart.

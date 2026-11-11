@@ -1,0 +1,56 @@
+# The Gateway for the kind cluster (docs/07 "Local cluster (kind)"). Applied by `make kind-up` after
+# Envoy Gateway is installed. EKS gets its own Gateway in Phase 9 (behind an NLB).
+
+# How Envoy Gateway runs the proxy for this Gateway: a NodePort Service on a fixed port, so kind can
+# map it to the Mac (deploy/local/kind-config.yaml). kind has no cloud load balancer, so the default
+# LoadBalancer Service would stay <pending>.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: kind-nodeport
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: NodePort
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - port: 80
+                  nodePort: 30080
+---
+# The controller that implements Gateways of this class: Envoy Gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+# The door: one HTTP listener on port 80. Routes may attach only from the app namespace.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gapless-gateway
+  namespace: envoy-gateway-system
+spec:
+  gatewayClassName: eg
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: kind-nodeport
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: gapless
