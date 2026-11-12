@@ -41,3 +41,14 @@ api:
     # No CPU limit on purpose: it causes throttling (docs/07 "Pod standards").
     limits:
       memory: 256Mi
+
+indexer:
+  image:
+    repository: gapless-indexer
+  # No replicas value on purpose: the indexer always runs 1 replica (docs/03 "Leader").
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gapless.fullname" . }}-indexer
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "indexer") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "gapless.selectorLabels" (dict "root" $ "component" "indexer") | nindent 4 }}
+  # The indexer serves no API. This Service exists only so Prometheus can find /metrics.
+  ports:
+    - name: metrics
+      port: {{ .Values.ports.metrics }}
+      targetPort: metrics
