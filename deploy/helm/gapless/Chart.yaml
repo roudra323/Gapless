@@ -1,0 +1,10 @@
+apiVersion: v2
+name: gapless
+description: The Gapless ERC-20 Transfer indexer and read API.
+type: application
+# The chart's own version. Bump it when a template changes.
+version: 0.1.0
+# The app version comes from the image tag (the git SHA, set at install time), not from here.
+appVersion: dev
+# The EKS minor that kind pins (docs/07).
+kubeVersion: '>=1.37.0-0'

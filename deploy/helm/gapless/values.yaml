@@ -1,0 +1,43 @@
+# Defaults: safe and production-like (docs/07 "Values files").
+# values-local.yaml (kind) and values-eks.yaml (EKS) override them.
+
+nameOverride: ''
+
+image:
+  # The git SHA of the build. Required, and never `latest` (docs/07 "Pod standards").
+  tag: ''
+  pullPolicy: IfNotPresent
+
+# The Secret with DATABASE_URL, RPC_HTTP_URL and RPC_WS_URL. The chart never creates it:
+# `make kind-up` does on kind, and the External Secrets Operator does on EKS.
+secretName: gapless-secrets
+
+# Non-secret env for both apps (docs/02 "Configuration"). Strings, because env values are strings.
+config:
+  logLevel: info
+  chainId: '' # required
+  tokenAddress: '' # required
+  startBlock: '' # required (indexer)
+  confirmations: '5'
+  batchSize: '2000'
+  pollIntervalMs: '4000'
+  blockTimeMs: '12000'
+  reorgRewindBlocks: '64'
+  # Must stay below terminationGracePeriodSeconds (30 s), see docs/03 "Graceful shutdown".
+  shutdownTimeoutMs: '20000'
+
+ports:
+  http: 3000
+  metrics: 9464
+
+api:
+  image:
+    repository: gapless-api
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    # No CPU limit on purpose: it causes throttling (docs/07 "Pod standards").
+    limits:
+      memory: 256Mi

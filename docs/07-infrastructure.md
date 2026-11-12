@@ -52,12 +52,12 @@ One Dockerfile per app (`apps/<app>/Dockerfile`), with the build context at the 
 - Resources: set CPU and memory **requests**, and a memory **limit**. Don't set CPU limits (they cause throttling; requests are enough for scheduling).
 - Probes: `startupProbe`, `livenessProbe` (`/healthz`), and `readinessProbe` (`/readyz`), all on the metrics port. Semantics are in `docs/02` and `docs/03`.
 - Standard labels: `app.kubernetes.io/{name,instance,component,version,part-of,managed-by}`.
-- Images are referenced as `repo:gitsha` (values set by CI), never `latest`.
+- Images are referenced as `repo:gitsha` (values set by CI), never `latest`. The chart fails to render without `image.tag` or with `latest`, and sets `APP_VERSION` from the same tag.
 
 ### Values files
 
 - `values.yaml`: defaults, safe and production-like.
-- `values-local.yaml`: kind (`imagePullPolicy: Never`, local DB host, plain Secret, Envoy Gateway's Gateway name).
+- `values-local.yaml`: kind (`imagePullPolicy: Never`, the anvil chain ID and token address, Envoy Gateway's Gateway name). The chart never creates the app Secret: `make kind-up` creates it on kind.
 - `values-eks.yaml`: EKS (ECR repo, ExternalSecret enabled, the Envoy Gateway's Gateway name).
 
 ## Local cluster (kind): `make kind-up`

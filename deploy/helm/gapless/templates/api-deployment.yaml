@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gapless.fullname" . }}-api
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "api") | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "gapless.selectorLabels" (dict "root" $ "component" "api") | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Start one new Pod first, and remove an old one only when the new one is ready.
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        {{- include "gapless.labels" (dict "root" $ "component" "api") | nindent 8 }}
+      annotations:
+        # A config change changes this hash, so the Pods restart and read the new env.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "gapless.fullname" . }}-api
+      automountServiceAccountToken: false
+      # Must be more than SHUTDOWN_TIMEOUT_MS (docs/03 "Graceful shutdown").
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        # The distroless "nonroot" user (USER 65532:65532 in the Dockerfile).
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: {{ printf "%s:%s" .Values.api.image.repository (include "gapless.imageTag" .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ports.http }}
+            - name: metrics
+              containerPort: {{ .Values.ports.metrics }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "gapless.fullname" . }}-config
+            - secretRef:
+                name: {{ .Values.secretName }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          # All probes use the metrics port; the Gateway never routes it (docs/02 "Ports").
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            periodSeconds: 5
+            # /readyz waits up to 2 s for `select 1`.
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
