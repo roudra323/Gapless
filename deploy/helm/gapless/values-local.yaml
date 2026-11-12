@@ -8,3 +8,8 @@ config:
   # The first contract that anvil's first account deploys always has this address.
   tokenAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
   startBlock: '1'
+
+# The Gateway from deploy/local/gateway.yaml.
+gateway:
+  name: gapless-gateway
+  namespace: envoy-gateway-system

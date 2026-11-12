@@ -41,3 +41,14 @@ app.kubernetes.io/part-of: gapless
 app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 helm.sh/chart: {{ printf "%s-%s" .root.Chart.Name .root.Chart.Version }}
 {{- end -}}
+
+{{/* A NetworkPolicy peer: the Prometheus Pods of kube-prometheus-stack (step 6). */}}
+{{- define "gapless.prometheusPeer" -}}
+# Both selectors in one entry: the Pod must match both (AND, not OR).
+- namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: {{ .Values.networkPolicy.prometheusNamespace }}
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+{{- end -}}

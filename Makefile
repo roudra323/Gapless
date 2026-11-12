@@ -13,6 +13,11 @@ KUBECTL := kubectl --context $(KUBE_CONTEXT)
 HELM := helm --kube-context $(KUBE_CONTEXT)
 # Envoy Gateway release (docs/04). Its CRD chart pins the Gateway API version it is tested with.
 ENVOY_GATEWAY_VERSION := v1.10.0
+CHART := deploy/helm/gapless
+# The Kubernetes version that the chart is checked against (the EKS minor, docs/04).
+KUBE_VERSION := 1.37.0
+# JSON schemas for CRDs (HTTPRoute, later ServiceMonitor), pinned to a commit of the catalog.
+CRD_SCHEMAS := https://raw.githubusercontent.com/datreeio/CRDs-catalog/49729e49e8f062933e3716a26540d41b0cd0856c/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 
 .PHONY: kind-up
 kind-up: ## Create the kind cluster with the Gateway, Postgres, anvil and the app Secret (safe to rerun)
@@ -46,3 +51,10 @@ kind-up: ## Create the kind cluster with the Gateway, Postgres, anvil and the ap
 .PHONY: kind-down
 kind-down: ## Delete the local kind cluster and everything in it
 	kind delete cluster --name $(KIND_CLUSTER)
+
+.PHONY: chart-lint
+chart-lint: ## Lint the Helm chart and check the rendered manifests with kubeconform
+	helm lint --strict $(CHART) -f $(CHART)/values-local.yaml --set image.tag=lint
+	helm template gapless $(CHART) -n gapless -f $(CHART)/values-local.yaml --set image.tag=lint \
+		| kubeconform -strict -summary -kubernetes-version $(KUBE_VERSION) \
+			-schema-location default -schema-location '$(CRD_SCHEMAS)'

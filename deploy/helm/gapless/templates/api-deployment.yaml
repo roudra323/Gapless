@@ -5,7 +5,10 @@ metadata:
   labels:
     {{- include "gapless.labels" (dict "root" $ "component" "api") | nindent 4 }}
 spec:
+  {{- /* With an HPA, Helm must not set replicas, or each upgrade would reset the HPA's count. */}}
+  {{- if not .Values.api.autoscaling.enabled }}
   replicas: {{ .Values.api.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "gapless.selectorLabels" (dict "root" $ "component" "api") | nindent 6 }}

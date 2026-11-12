@@ -1,0 +1,48 @@
+{{- if .Values.networkPolicy.enabled }}
+# The API: /v1 only from the Gateway's proxy Pods, /metrics only from Prometheus.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "gapless.fullname" . }}-api
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "api") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "gapless.selectorLabels" (dict "root" $ "component" "api") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # Both selectors in one entry: the Pod must match both (AND, not OR).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.gateway.namespace }}
+          podSelector:
+            matchLabels:
+              # The standard label that every Gateway API implementation puts on its proxy Pods.
+              gateway.networking.k8s.io/gateway-name: {{ .Values.gateway.name }}
+      ports:
+        - port: http
+    - from:
+        {{- include "gapless.prometheusPeer" . | nindent 8 }}
+      ports:
+        - port: metrics
+---
+# The indexer serves no API: /metrics only from Prometheus.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "gapless.fullname" . }}-indexer
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "indexer") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "gapless.selectorLabels" (dict "root" $ "component" "indexer") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- include "gapless.prometheusPeer" . | nindent 8 }}
+      ports:
+        - port: metrics
+{{- end }}
