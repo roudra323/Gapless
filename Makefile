@@ -18,6 +18,11 @@ CHART := deploy/helm/gapless
 KUBE_VERSION := 1.37.0
 # JSON schemas for CRDs (HTTPRoute, later ServiceMonitor), pinned to a commit of the catalog.
 CRD_SCHEMAS := https://raw.githubusercontent.com/datreeio/CRDs-catalog/49729e49e8f062933e3716a26540d41b0cd0856c/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
+# The image tag: the short git SHA (docs/07 "Pod standards"). Uncommitted changes add
+# `-dirty-<hash of the diff>`, so a changed working tree gets a new tag and a new rollout.
+ifndef IMAGE_TAG
+IMAGE_TAG := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD || echo "-dirty-$$(git diff HEAD | shasum | cut -c1-8)")
+endif
 
 .PHONY: kind-up
 kind-up: ## Create the kind cluster with the Gateway, Postgres, anvil and the app Secret (safe to rerun)
@@ -47,6 +52,15 @@ kind-up: ## Create the kind cluster with the Gateway, Postgres, anvil and the ap
 		--from-literal=RPC_HTTP_URL=http://anvil:8545 \
 		--from-literal=RPC_WS_URL=ws://anvil:8545 \
 		--dry-run=client -o yaml | $(KUBECTL) apply -f -
+
+.PHONY: kind-deploy
+kind-deploy: ## Build both images, load them into kind, and deploy the chart (local values)
+	docker build -f apps/indexer/Dockerfile --build-arg GIT_SHA=$(IMAGE_TAG) -t gapless-indexer:$(IMAGE_TAG) .
+	docker build -f apps/api/Dockerfile --build-arg GIT_SHA=$(IMAGE_TAG) -t gapless-api:$(IMAGE_TAG) .
+	kind load docker-image gapless-indexer:$(IMAGE_TAG) gapless-api:$(IMAGE_TAG) --name $(KIND_CLUSTER)
+	$(HELM) upgrade --install gapless $(CHART) -n gapless -f $(CHART)/values-local.yaml \
+		--set image.tag=$(IMAGE_TAG) --wait --timeout 5m
+	@echo "Deployed $(IMAGE_TAG). API: http://localhost:8080/v1/stats"
 
 .PHONY: kind-down
 kind-down: ## Delete the local kind cluster and everything in it

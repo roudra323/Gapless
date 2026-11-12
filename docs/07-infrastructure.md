@@ -71,7 +71,7 @@ One Dockerfile per app (`apps/<app>/Dockerfile`), with the build context at the 
 
 `make chart-lint` runs `helm lint --strict` and checks the rendered chart with `kubeconform -strict` against the Kubernetes version of `kind-config.yaml` and the CRD schemas (HTTPRoute, ServiceMonitor) from the `datreeio/CRDs-catalog` repository, pinned to a commit in the `Makefile`.
 
-`make kind-deploy` builds the images, runs `kind load docker-image`, then runs `helm upgrade --install` with `values-local.yaml`.
+`make kind-deploy` builds both images, runs `kind load docker-image`, then runs `helm upgrade --install` with `values-local.yaml` and `--wait`. The image tag is the short git SHA. Uncommitted changes add `-dirty-<hash of the diff>`, so each changed working tree gets a new tag and a new rollout (untracked files are not in the hash; `IMAGE_TAG=…` overrides the tag). Deploy the MockToken to `http://localhost:18545` before the first `kind-deploy`: without contract code at `TOKEN_ADDRESS`, the indexer exits at startup and `--wait` times out.
 
 Also include `make port-forward` for Grafana and the gateway, and `make load`, which runs the k6 script in `deploy/load/` (the pinned `grafana/k6` image) against the gateway.
 
