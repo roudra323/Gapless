@@ -86,3 +86,9 @@ networkPolicy:
   enabled: true
   # The namespace where kube-prometheus-stack runs Prometheus (step 6).
   prometheusNamespace: monitoring
+
+# Prometheus scraping, alert rules and the Grafana dashboard (docs/09). These objects need the
+# kube-prometheus-stack CRDs, which `make kind-up` installs.
+monitoring:
+  enabled: true
+  scrapeInterval: 15s

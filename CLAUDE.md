@@ -65,6 +65,7 @@ docker compose --profile app up -d --build --wait   # full stack from the images
 # Phase 8
 make kind-up                 # local cluster + gateway + monitoring stack (Prometheus, Grafana, Alertmanager, Loki, Alloy)
 make chart-lint              # helm lint --strict + kubeconform -strict on the rendered chart
+make rules-test              # promtool check + unit tests for the alert rules
 make kind-deploy             # build images, kind load, helm upgrade (local values)
 make kind-down
 make port-forward            # Grafana and the gateway

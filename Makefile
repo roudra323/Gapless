@@ -13,6 +13,10 @@ KUBECTL := kubectl --context $(KUBE_CONTEXT)
 HELM := helm --kube-context $(KUBE_CONTEXT)
 # Envoy Gateway release (docs/04). Its CRD chart pins the Gateway API version it is tested with.
 ENVOY_GATEWAY_VERSION := v1.10.0
+# kube-prometheus-stack chart (docs/04): Prometheus Operator, Prometheus, Grafana, Alertmanager.
+KPS_VERSION := 92.22.0
+# The Prometheus image of that chart, for promtool (`make rules-test`).
+PROMETHEUS_IMAGE := quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd
 CHART := deploy/helm/gapless
 # The Kubernetes version that the chart is checked against (the EKS minor, docs/04).
 KUBE_VERSION := 1.37.0
@@ -25,7 +29,7 @@ IMAGE_TAG := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD ||
 endif
 
 .PHONY: kind-up
-kind-up: ## Create the kind cluster with the Gateway, Postgres, anvil and the app Secret (safe to rerun)
+kind-up: ## Create the kind cluster with the Gateway, monitoring, Postgres, anvil and the app Secret (safe to rerun)
 	@if kind get clusters 2>/dev/null | grep -qx '$(KIND_CLUSTER)'; then \
 		echo "kind cluster '$(KIND_CLUSTER)' already exists"; \
 	else \
@@ -41,6 +45,14 @@ kind-up: ## Create the kind cluster with the Gateway, Postgres, anvil and the ap
 		--namespace envoy-gateway-system --create-namespace --set crds.enabled=false --wait
 	$(KUBECTL) apply -f deploy/local/gateway.yaml
 	$(KUBECTL) -n envoy-gateway-system wait gateway/gapless-gateway --for=condition=Programmed --timeout=180s
+	@# Monitoring: Prometheus (with the Operator and its CRDs), Grafana and Alertmanager.
+	$(HELM) upgrade --install kube-prometheus-stack oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+		--version $(KPS_VERSION) --namespace monitoring --create-namespace \
+		-f deploy/monitoring/kps-values.yaml --wait --timeout 10m
+	@# The Operator creates Prometheus and Alertmanager after Helm returns, so Helm's --wait cannot see them.
+	$(KUBECTL) -n monitoring wait statefulset/prometheus-kube-prometheus-stack-prometheus --for=create --timeout=120s
+	$(KUBECTL) -n monitoring rollout status statefulset/prometheus-kube-prometheus-stack-prometheus \
+		statefulset/alertmanager-kube-prometheus-stack-alertmanager --timeout=600s
 	@# The app namespace, then the dev-only Postgres and anvil (never part of the app chart).
 	$(KUBECTL) apply -f deploy/local/namespace.yaml
 	$(KUBECTL) apply -f deploy/local/postgres.yaml -f deploy/local/anvil.yaml
@@ -52,6 +64,13 @@ kind-up: ## Create the kind cluster with the Gateway, Postgres, anvil and the ap
 		--from-literal=RPC_HTTP_URL=http://anvil:8545 \
 		--from-literal=RPC_WS_URL=ws://anvil:8545 \
 		--dry-run=client -o yaml | $(KUBECTL) apply -f -
+
+.PHONY: rules-test
+rules-test: ## Check the alert rules and run their unit tests with promtool
+	docker run --rm -v "$(CURDIR)/deploy:/deploy:ro" -w /deploy/monitoring/tests --entrypoint /bin/promtool \
+		$(PROMETHEUS_IMAGE) check rules /deploy/helm/gapless/rules/gapless.rules.yaml
+	docker run --rm -v "$(CURDIR)/deploy:/deploy:ro" -w /deploy/monitoring/tests --entrypoint /bin/promtool \
+		$(PROMETHEUS_IMAGE) test rules gapless.rules.test.yaml
 
 .PHONY: kind-deploy
 kind-deploy: ## Build both images, load them into kind, and deploy the chart (local values)

@@ -1,0 +1,13 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "gapless.fullname" . }}
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "monitoring") | nindent 4 }}
+# The alerts from docs/09. The rules live in a plain Prometheus rule file, so promtool can test
+# the same file (`make rules-test`). .Files.Get does not run it as a template, so the alert
+# templates (for example $value in a summary) need no escaping.
+spec:
+  {{- .Files.Get "rules/gapless.rules.yaml" | nindent 2 }}
+{{- end }}

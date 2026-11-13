@@ -9,7 +9,8 @@
 | Integration     | Vitest + Testcontainers (Postgres 18) + anvil          | `{apps,packages}/*/test/integration/*.int.spec.ts` | `pnpm test:integration`, every PR                               | 2 (DB), 3 (indexer) |
 | Chaos (indexer) | Vitest + anvil + Testcontainers                        | `apps/indexer/test/chaos/*.chaos.spec.ts`          | `pnpm test:chaos`, every PR (keep them fast: under 2 min total) | 4                   |
 | API e2e         | Vitest + supertest against a booted Nest app           | `apps/api/test/e2e/*.e2e.spec.ts`                  | `pnpm test:integration`, every PR                               | 5                   |
-| Manifests       | `helm lint`, `helm template \| kubeconform -strict`    | `deploy/`                                          | every PR touching `deploy/`                                     | 8                   |
+| Manifests       | `helm lint`, `helm template \| kubeconform -strict`    | `deploy/`                                          | `make chart-lint`, every PR touching `deploy/`                  | 8                   |
+| Alert rules     | `promtool test rules`                                  | `deploy/monitoring/tests/`                         | `make rules-test`, every PR touching `deploy/`                  | 8                   |
 | Infra           | `terraform fmt -check`, `terraform validate`, `tflint` | `infra/`                                           | every PR touching `infra/`                                      | 9                   |
 | Infra (Floci)   | `terraform apply` + `destroy` against Floci            | `infra/terraform/envs/dev`                         | `make floci-apply`, every PR touching `infra/`                  | 9a                  |
 | Load (demo)     | k6                                                     | `deploy/load/`                                     | `make load`, by hand against kind or EKS (not in CI)            | 8                   |
