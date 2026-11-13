@@ -22,6 +22,16 @@ LOKI_CHART_REPO := https://grafana-community.github.io/helm-charts
 LOKI_VERSION := 21.1.3
 ALLOY_CHART_REPO := https://grafana.github.io/helm-charts
 ALLOY_VERSION := 1.15.0
+# metrics-server (docs/04): the CPU numbers for the API's HPA. kind only; EKS uses its add-on.
+METRICS_SERVER_CHART_REPO := https://kubernetes-sigs.github.io/metrics-server/
+METRICS_SERVER_VERSION := 3.14.0
+# k6 for `make load` (docs/04), pinned by digest. It joins the `kind` Docker network and calls the
+# Gateway on the node's NodePort. Against another Gateway: `make load LOAD_URL=http://… LOAD_NETWORK=bridge`.
+K6_IMAGE := grafana/k6:2.3.0@sha256:2dd4756ec6e14e62778916e1eb850108e4b499304c02df56760fa0bdb0fba0b8
+LOAD_URL ?= http://$(KIND_CLUSTER)-control-plane:30080
+LOAD_NETWORK ?= kind
+# Local ports for `make port-forward` (not 3000: `pnpm api:start` uses it).
+GRAFANA_PORT ?= 3001
 PROMETHEUS_IMAGE := quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd
 # The Discord webhook URL for Alertmanager, in a file outside the repo (docs/07). Never commit it.
 DISCORD_WEBHOOK_FILE ?= $(HOME)/.config/gapless/discord-webhook-url
@@ -37,7 +47,7 @@ IMAGE_TAG := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD ||
 endif
 
 .PHONY: kind-up
-kind-up: ## Create the kind cluster with the Gateway, monitoring, logs, Postgres, anvil and the app Secret (safe to rerun)
+kind-up: ## Create the kind cluster with the Gateway, metrics-server, monitoring, logs, Postgres, anvil and the app Secret (safe to rerun)
 	@if kind get clusters 2>/dev/null | grep -qx '$(KIND_CLUSTER)'; then \
 		echo "kind cluster '$(KIND_CLUSTER)' already exists"; \
 	else \
@@ -53,6 +63,10 @@ kind-up: ## Create the kind cluster with the Gateway, monitoring, logs, Postgres
 		--namespace envoy-gateway-system --create-namespace --set crds.enabled=false --wait
 	$(KUBECTL) apply -f deploy/local/gateway.yaml
 	$(KUBECTL) -n envoy-gateway-system wait gateway/gapless-gateway --for=condition=Programmed --timeout=180s
+	@# metrics-server: the HPA reads the API Pods' CPU from it (and `kubectl top` uses it).
+	$(HELM) upgrade --install metrics-server metrics-server --repo $(METRICS_SERVER_CHART_REPO) \
+		--version $(METRICS_SERVER_VERSION) --namespace kube-system \
+		-f deploy/local/metrics-server-values.yaml --wait --timeout 5m
 	@# Monitoring: Prometheus (with the Operator and its CRDs), Grafana and Alertmanager.
 	@# The Alertmanager Secret first: the Alertmanager Pod mounts it. Without the file, alerts still
 	@# fire in the UI but reach no chat. The URL is never printed (the recipe line starts with @).
@@ -105,6 +119,23 @@ kind-deploy: ## Build both images, load them into kind, and deploy the chart (lo
 	$(HELM) upgrade --install gapless $(CHART) -n gapless -f $(CHART)/values-local.yaml \
 		--set image.tag=$(IMAGE_TAG) --wait --timeout 5m
 	@echo "Deployed $(IMAGE_TAG). API: http://localhost:8080/v1/stats"
+
+.PHONY: load
+load: ## Run the k6 load test against the Gateway (HPA demo; HOLD=4m sets the hold time)
+	docker run --rm --network $(LOAD_NETWORK) -v "$(CURDIR)/deploy/load:/scripts:ro" \
+		-e BASE_URL=$(LOAD_URL) -e HOLD=$(or $(HOLD),4m) $(K6_IMAGE) run /scripts/api.js
+
+.PHONY: port-forward
+port-forward: ## Forward Grafana, Prometheus and Alertmanager to localhost (Ctrl-C stops all)
+	@echo "Grafana       http://localhost:$(GRAFANA_PORT)  (user admin; password: docs/07)"
+	@echo "Prometheus    http://localhost:9090"
+	@echo "Alertmanager  http://localhost:9093"
+	@echo "API (Gateway) http://localhost:8080/v1/stats  (kind port mapping, no forward needed)"
+	@trap 'kill 0' INT TERM; \
+	$(KUBECTL) -n monitoring port-forward svc/kube-prometheus-stack-grafana $(GRAFANA_PORT):80 >/dev/null & \
+	$(KUBECTL) -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090:9090 >/dev/null & \
+	$(KUBECTL) -n monitoring port-forward svc/kube-prometheus-stack-alertmanager 9093:9093 >/dev/null & \
+	wait
 
 .PHONY: kind-down
 kind-down: ## Delete the local kind cluster and everything in it

@@ -68,7 +68,7 @@ make chart-lint              # helm lint --strict + kubeconform -strict on the r
 make rules-test              # promtool check + unit tests for the alert rules
 make kind-deploy             # build images, kind load, helm upgrade (local values)
 make kind-down
-make port-forward            # Grafana and the gateway
+make port-forward            # Grafana, Prometheus and Alertmanager to localhost
 make load                    # k6 load test against the gateway (HPA demo)
 # Phase 9
 make floci-up                # start the local Floci AWS emulator (pinned image, localhost:4566)

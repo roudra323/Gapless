@@ -1,0 +1,7 @@
+# metrics-server on kind (`make kind-up`): the CPU and memory numbers that the API's HPA reads
+# (`kubectl top` uses them too). The chart version is pinned in the Makefile. EKS installs
+# metrics-server as an add-on in Phase 9.
+args:
+  # A kind kubelet serves its metrics with a self-signed certificate that has no IP SAN, so
+  # metrics-server cannot verify it. Local cluster only: never set this on EKS.
+  - --kubelet-insecure-tls
