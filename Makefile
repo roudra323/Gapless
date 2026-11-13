@@ -16,6 +16,12 @@ ENVOY_GATEWAY_VERSION := v1.10.0
 # kube-prometheus-stack chart (docs/04): Prometheus Operator, Prometheus, Grafana, Alertmanager.
 KPS_VERSION := 92.22.0
 # The Prometheus image of that chart, for promtool (`make rules-test`).
+# Logs (docs/04): Loki from the community chart repository (the OSS chart moved there in March 2026)
+# and Grafana Alloy, the collector.
+LOKI_CHART_REPO := https://grafana-community.github.io/helm-charts
+LOKI_VERSION := 21.1.3
+ALLOY_CHART_REPO := https://grafana.github.io/helm-charts
+ALLOY_VERSION := 1.15.0
 PROMETHEUS_IMAGE := quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd
 # The Discord webhook URL for Alertmanager, in a file outside the repo (docs/07). Never commit it.
 DISCORD_WEBHOOK_FILE ?= $(HOME)/.config/gapless/discord-webhook-url
@@ -31,7 +37,7 @@ IMAGE_TAG := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD ||
 endif
 
 .PHONY: kind-up
-kind-up: ## Create the kind cluster with the Gateway, monitoring, Postgres, anvil and the app Secret (safe to rerun)
+kind-up: ## Create the kind cluster with the Gateway, monitoring, logs, Postgres, anvil and the app Secret (safe to rerun)
 	@if kind get clusters 2>/dev/null | grep -qx '$(KIND_CLUSTER)'; then \
 		echo "kind cluster '$(KIND_CLUSTER)' already exists"; \
 	else \
@@ -66,6 +72,12 @@ kind-up: ## Create the kind cluster with the Gateway, monitoring, Postgres, anvi
 	$(KUBECTL) -n monitoring wait statefulset/prometheus-kube-prometheus-stack-prometheus --for=create --timeout=120s
 	$(KUBECTL) -n monitoring rollout status statefulset/prometheus-kube-prometheus-stack-prometheus \
 		statefulset/alertmanager-kube-prometheus-stack-alertmanager --timeout=600s
+	@# Logs: Loki stores them, Alloy (one Pod per node) ships every Pod's logs to it. Grafana already
+	@# has Loki as a data source (kps-values.yaml).
+	$(HELM) upgrade --install loki loki --repo $(LOKI_CHART_REPO) --version $(LOKI_VERSION) \
+		--namespace monitoring -f deploy/monitoring/loki-values.yaml --wait --timeout 10m
+	$(HELM) upgrade --install alloy alloy --repo $(ALLOY_CHART_REPO) --version $(ALLOY_VERSION) \
+		--namespace monitoring -f deploy/monitoring/alloy-values.yaml --wait --timeout 5m
 	@# The app namespace, then the dev-only Postgres and anvil (never part of the app chart).
 	$(KUBECTL) apply -f deploy/local/namespace.yaml
 	$(KUBECTL) apply -f deploy/local/postgres.yaml -f deploy/local/anvil.yaml

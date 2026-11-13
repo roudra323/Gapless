@@ -49,6 +49,14 @@ grafana:
       label: grafana_dashboard
       labelValue: '1'
       searchNamespace: ALL
+  # Loki (loki-values.yaml) as a second data source. The fixed uid lets the dashboard's `logs`
+  # variable default to it.
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
 
 alertmanager:
   alertmanagerSpec:

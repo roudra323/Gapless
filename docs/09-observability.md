@@ -82,14 +82,14 @@ The rows:
 2. **RPC:** request rate by method, error ratio, p95 latency.
 3. **API:** RPS by route, p50/p95/p99 latency, 5xx rate.
 4. **Platform:** pod CPU/memory vs requests, restarts, HPA replica count.
-5. **Logs** (with Loki): a Loki panel with the indexer's `warn` and higher lines (`{namespace="$namespace", app_kubernetes_io_component="indexer"} | json | level=~"warn|error|fatal"`; pino writes `level` as a string label), next to the lag graph.
+5. **Logs** (from Loki, through the `logs` data source variable): log lines per second by component and level (`| json level`), the indexer's `warn` and higher lines (`{namespace="$namespace", app_kubernetes_io_component="indexer"} | json | level=~"warn|error|fatal"`; pino writes `level` as a string), and the API's `error` and higher lines (each has its `reqId`).
 
 Use a `$namespace` template variable, and use `$__rate_interval` in rate queries.
 
 ## Logs
 
 - pino JSON to stdout, one line per entry. Base fields: `level`, `time` (ISO), `service` (`api`/`indexer`), `version` (Git SHA), `msg`.
-- In the cluster, **Grafana Alloy** collects pod stdout and ships it to **Loki** (Phase 8). Labels come from Kubernetes metadata only (namespace, pod, container, `app.kubernetes.io/component`); never turn a log field such as `reqId` or an address into a Loki label (the same cardinality rule as metrics). Query JSON fields with `| json`.
+- In the cluster, **Grafana Alloy** collects pod stdout and ships it to **Loki** (Phase 8). Labels come from Kubernetes metadata only (`namespace`, `pod`, `container`, `app_kubernetes_io_name`, `app_kubernetes_io_component`; Alloy also adds `job` and `instance`, and Loki adds `service_name`); never turn a log field such as `reqId` or an address into a Loki label (the same cardinality rule as metrics). Query JSON fields with `| json`.
 - The shared logger still adds a GCP Cloud Logging `severity` field (from Phase 3, `GCP_SEVERITY` in `packages/observability`). It has no use on AWS and is removed in Phase 9 (`adr/0003`).
 - The API adds a request-scoped `reqId`, honoring an incoming `x-request-id` header or generating one, and returns it in the response header (`apps/api/src/request-id.ts`). An incoming ID is kept only if it matches `^[A-Za-z0-9._:-]{1,128}$`, so a client can't inject a line break into the logs; otherwise a UUID is used. Every log line written during a request has `reqId` (pino-http `quietReqLogger`), and the one line per request (`request completed` / `request errored`) adds `req: { method, url }`, `res: { statusCode }` and `responseTime` in ms. Headers are never logged. Probes on `METRICS_PORT` are not logged (they bypass Nest).
 - Redact: `DATABASE_URL`, `RPC_*`, `authorization` headers.

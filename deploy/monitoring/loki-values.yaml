@@ -1,0 +1,70 @@
+# Loki on kind (`make kind-up`), from the community chart (grafana-community/helm-charts; the OSS
+# chart moved there in March 2026). The chart version is pinned in the Makefile. Only the settings
+# we change are here; everything else is the chart default.
+
+# One process that does everything (docs/04). Enough for a dev cluster.
+deploymentMode: Monolithic
+
+loki:
+  # One tenant, so Alloy and Grafana need no X-Scope-OrgID header.
+  auth_enabled: false
+  # No usage statistics sent to Grafana Labs.
+  analytics:
+    reporting_enabled: false
+  commonConfig:
+    replication_factor: 1
+  # Chunks and index on the Pod's local disk (no object storage).
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: '2026-01-01'
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  # Keep two days of logs, like Prometheus (kps-values.yaml). The compactor deletes older chunks.
+  limits_config:
+    retention_period: 48h
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+
+singleBinary:
+  replicas: 1
+  # The data lives in an emptyDir: a new Pod starts with no logs. Accepted for a dev cluster (docs/07).
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# Not needed with one Loki Pod: Alloy and Grafana call the Loki Service directly.
+gateway:
+  enabled: false
+# The memcached caches ask for several GB of memory; a dev cluster does not need them.
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+# The canary and the Helm test Pod only check Loki itself.
+# No Loki alert or recording rules, so no sidecar that loads them from ConfigMaps.
+sidecar:
+  rules:
+    enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+# The simple-scalable targets have replicas by default; the chart refuses both modes at once.
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
