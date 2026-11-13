@@ -174,3 +174,30 @@ jobs:
           echo "$out"
           test "$code" -eq 1
           grep -q '"msg":"invalid configuration"' <<<"$out"
+
+  # Lints the Helm chart, checks the rendered manifests with kubeconform, and unit-tests the alert
+  # rules with promtool (docs/08). The same Makefile targets as on a laptop.
+  manifests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: v4.3.1
+      # No maintained setup action for kubeconform: download the release and check its SHA-256
+      # (from the release's CHECKSUMS file).
+      - name: Install kubeconform v0.8.0
+        env:
+          URL: https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/kubeconform.tar.gz" "$URL"
+          echo "$SHA256  $RUNNER_TEMP/kubeconform.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/kubeconform.tar.gz" -C "$RUNNER_TEMP" kubeconform
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - run: make chart-lint
+      # promtool from the pinned Prometheus image (the runner has Docker).
+      - run: make rules-test
