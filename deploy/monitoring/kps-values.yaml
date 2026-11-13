@@ -49,3 +49,50 @@ grafana:
       label: grafana_dashboard
       labelValue: '1'
       searchNamespace: ALL
+
+alertmanager:
+  alertmanagerSpec:
+    # The Discord webhook URL, from the Secret that `make kind-up` creates from a file outside
+    # the repo. Mounted at /etc/alertmanager/secrets/alertmanager-discord/url.
+    secrets:
+      - alertmanager-discord
+  config:
+    global:
+      resolve_timeout: 5m
+    # docs/09 "Alerts": warning and critical go to the chat channel, grouped by alert name, and
+    # the channel also gets the recovery. info stays in the UI.
+    route:
+      receiver: 'null'
+      group_by: ['alertname', 'namespace']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # Watchdog always fires on purpose: it proves the alert pipeline works. Never send it.
+        - receiver: 'null'
+          matchers:
+            - alertname = "Watchdog"
+        - receiver: discord
+          matchers:
+            - severity =~ "warning|critical"
+    receivers:
+      - name: 'null'
+      - name: discord
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/url
+            send_resolved: true
+    # The chart's default inhibit rules (a critical alert hides the warning and info alerts with
+    # the same name in the same namespace). Setting `config` replaces the defaults, so keep them.
+    inhibit_rules:
+      - source_matchers: ['severity = critical']
+        target_matchers: ['severity =~ warning|info']
+        equal: ['namespace', 'alertname']
+      - source_matchers: ['severity = warning']
+        target_matchers: ['severity = info']
+        equal: ['namespace', 'alertname']
+      - source_matchers: ['alertname = InfoInhibitor']
+        target_matchers: ['severity = info']
+        equal: ['namespace']
+      - target_matchers: ['alertname = InfoInhibitor']
+    templates:
+      - '/etc/alertmanager/config/*.tmpl'

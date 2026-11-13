@@ -17,6 +17,8 @@ ENVOY_GATEWAY_VERSION := v1.10.0
 KPS_VERSION := 92.22.0
 # The Prometheus image of that chart, for promtool (`make rules-test`).
 PROMETHEUS_IMAGE := quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd
+# The Discord webhook URL for Alertmanager, in a file outside the repo (docs/07). Never commit it.
+DISCORD_WEBHOOK_FILE ?= $(HOME)/.config/gapless/discord-webhook-url
 CHART := deploy/helm/gapless
 # The Kubernetes version that the chart is checked against (the EKS minor, docs/04).
 KUBE_VERSION := 1.37.0
@@ -46,6 +48,17 @@ kind-up: ## Create the kind cluster with the Gateway, monitoring, Postgres, anvi
 	$(KUBECTL) apply -f deploy/local/gateway.yaml
 	$(KUBECTL) -n envoy-gateway-system wait gateway/gapless-gateway --for=condition=Programmed --timeout=180s
 	@# Monitoring: Prometheus (with the Operator and its CRDs), Grafana and Alertmanager.
+	@# The Alertmanager Secret first: the Alertmanager Pod mounts it. Without the file, alerts still
+	@# fire in the UI but reach no chat. The URL is never printed (the recipe line starts with @).
+	$(KUBECTL) create namespace monitoring --dry-run=client -o yaml | $(KUBECTL) apply -f -
+	@if [ -s "$(DISCORD_WEBHOOK_FILE)" ]; then \
+		url=$$(tr -d '[:space:]' < "$(DISCORD_WEBHOOK_FILE)"); \
+	else \
+		echo "WARNING: $(DISCORD_WEBHOOK_FILE) not found: alerts will not reach Discord (docs/07)"; \
+		url=http://127.0.0.1:9/no-webhook-configured; \
+	fi; \
+	$(KUBECTL) -n monitoring create secret generic alertmanager-discord --from-literal=url="$$url" \
+		--dry-run=client -o yaml | $(KUBECTL) apply -f -
 	$(HELM) upgrade --install kube-prometheus-stack oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
 		--version $(KPS_VERSION) --namespace monitoring --create-namespace \
 		-f deploy/monitoring/kps-values.yaml --wait --timeout 10m

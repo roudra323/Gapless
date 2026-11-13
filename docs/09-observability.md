@@ -68,9 +68,9 @@ The rules live in `deploy/helm/gapless/rules/gapless.rules.yaml` (plain Promethe
 | `ApiLatencyHigh`   | p95 of `gapless_http_request_duration_seconds` > 0.5s                                                 | 10m | warning                  |
 | `PodRestartsHigh`  | `increase(kube_pod_container_status_restarts_total{namespace="gapless"}[30m]) > 3`                    | 0m  | warning                  |
 
-Each alert has `summary` and `description` annotations and a `runbook_url` pointing to a section in `docs/runbooks.md` (create that in phase 8 with one short section per alert: meaning, first checks, fix).
+Each alert has `summary` and `description` annotations and a `runbook_url` pointing to its section in `docs/runbooks.md` (meaning, first checks, fix).
 
-**Alertmanager routing (Phase 8):** route `warning` and `critical` alerts to one chat webhook receiver (Discord or Slack), grouped by `alertname`, with `send_resolved: true` so the channel also shows recovery. `info` alerts (`IndexerWsDown`) stay in the UI only. The webhook URL is a secret: a local Secret on kind, Secrets Manager via ESO on EKS. Never commit it.
+**Alertmanager routing** (`alertmanager.config` in `deploy/monitoring/kps-values.yaml`): `warning` and `critical` alerts go to one Discord receiver (`discord_configs`), grouped by `alertname` and `namespace` (`group_wait` 30s, `group_interval` 5m, `repeat_interval` 4h), with `send_resolved: true` so the channel also shows recovery. `info` alerts (`IndexerWsDown`) and the always-firing `Watchdog` go to a `null` receiver and stay in the UI only. The chart's default inhibit rules are kept (a `critical` alert silences the `warning` of the same alert). The webhook URL is a secret, read from a file (`webhook_url_file`): a local Secret on kind (`docs/07`), Secrets Manager via ESO on EKS. Never commit it.
 
 ## Grafana dashboard (`deploy/helm/gapless/dashboards/gapless.json`)
 
