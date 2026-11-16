@@ -117,7 +117,8 @@ Two steps (`adr/0004`): **9a** writes and tests the Terraform against the local 
 
 - README with an architecture diagram, a demo GIF or video, a "what breaks and how it recovers" section, the cost notes, and a teardown guide.
 - `docs/postmortems/`: one postmortem from a real chaos drill (timeline, detection, alert, impact, recovery, follow-ups).
-- ✅ Done when someone unfamiliar can understand the project in 2 minutes from the README.
+- Fix every open finding in [`review-findings.md`](review-findings.md) (the review of Phases 0–8). Its "Phase 9 notes" are handled during Phase 9.
+- ✅ Done when someone unfamiliar can understand the project in 2 minutes from the README, and `review-findings.md` has no open item.
 
 ### Phase 11 — AKS port (optional)
 
