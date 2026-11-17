@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gapless.fullname" . }}-indexer
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "indexer") | nindent 4 }}
+spec:
+  # Always 1, not a value. The advisory lock keeps a single writer even if two Pods run
+  # (docs/03 "Leader"), but a second Pod would only wait as a standby.
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "gapless.selectorLabels" (dict "root" $ "component" "indexer") | nindent 6 }}
+  strategy:
+    # Stop the old Pod before the new one starts, so a rollout never runs two indexers
+    # (docs/07). The short gap is safe: the new Pod resumes from the checkpoint.
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "gapless.labels" (dict "root" $ "component" "indexer") | nindent 8 }}
+      annotations:
+        # A config change changes this hash, so the Pod restarts and reads the new env.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "gapless.fullname" . }}-indexer
+      automountServiceAccountToken: false
+      # Must be more than SHUTDOWN_TIMEOUT_MS, so the current batch can commit (docs/03
+      # "Graceful shutdown").
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        # The distroless "nonroot" user (USER 65532:65532 in the Dockerfile).
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: indexer
+          image: {{ printf "%s:%s" .Values.indexer.image.repository (include "gapless.imageTag" .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.ports.metrics }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "gapless.fullname" . }}-config
+            - secretRef:
+                name: {{ .Values.secretName }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          # All probes use the metrics port (docs/03 "Health").
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            periodSeconds: 2
+            failureThreshold: 30
+          # /healthz fails when no heartbeat came for max(60 s, 5 × POLL_INTERVAL_MS). It never
+          # checks lag or the RPC, so an RPC outage does not restart the Pod.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            periodSeconds: 10
+            failureThreshold: 3
+          # /readyz: this Pod holds the leader lock and the DB answers. Nothing routes traffic to
+          # the indexer; readiness shows in `kubectl get pods` and in the rollout status.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            periodSeconds: 5
+            # /readyz waits up to 2 s for `select 1`.
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            {{- toYaml .Values.indexer.resources | nindent 12 }}

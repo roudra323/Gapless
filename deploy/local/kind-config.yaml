@@ -1,0 +1,21 @@
+# The local kind cluster (docs/07 "Local cluster (kind)"). Created by `make kind-up`.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: gapless
+nodes:
+  # One node runs the control plane and every workload. Enough for local work; a PDB has nothing
+  # to protect against here, and is exercised on EKS (several nodes).
+  - role: control-plane
+    # Kubernetes 1.37, the EKS minor version in standard support (docs/07). Pinned by digest, from
+    # the kind v0.33.0 release notes.
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+    # Port mappings are fixed when the cluster is created; change them, then `make kind-down kind-up`.
+    extraPortMappings:
+      - containerPort: 30080 # Inside the kind Docker container
+        hostPort: 8080 # On your Mac
+        listenAddress: 127.0.0.1 # Only your Mac can call it (not Wi-Fi neighbors)
+      # anvil: http://localhost:18545 on the Mac → node port 30545 (deploy/local/anvil.yaml). Not 8545,
+      # so it doesn't clash with the Compose anvil.
+      - containerPort: 30545
+        hostPort: 18545
+        listenAddress: 127.0.0.1

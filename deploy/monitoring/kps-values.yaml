@@ -1,0 +1,106 @@
+# kube-prometheus-stack on kind (`make kind-up`). The chart version is pinned in the Makefile.
+# Only the settings we change are here; everything else is the chart default.
+
+# kind runs etcd, the scheduler, the controller manager and kube-proxy with their metrics bound
+# to 127.0.0.1, so Prometheus cannot reach them. Scraping them would only fire TargetDown.
+# EKS hides these components too.
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+defaultRules:
+  disabled:
+    # A kind node is a container with no NTP status (node_timex_sync_status is always 0); the
+    # Docker VM keeps its clock. On kind this warning would fire all the time. EKS nodes run
+    # chrony, so keep it there.
+    NodeClockNotSynchronising: true
+
+prometheus:
+  prometheusSpec:
+    # By default Prometheus reads only the ServiceMonitors and rules that carry this release's
+    # label. A missing label is a silent failure: no scrape, no alert, no error. Select every
+    # object in every namespace instead, so the app chart needs no special label.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    # A dev cluster: keep two days of data, in the Pod (emptyDir), not on a volume.
+    retention: 2d
+    resources:
+      requests:
+        cpu: 100m
+        memory: 400Mi
+      limits:
+        memory: 1Gi
+
+grafana:
+  # No admin password in the repo: the Grafana chart generates a random one into the Secret
+  # kube-prometheus-stack-grafana (read it with the command in docs/07).
+  defaultDashboardsTimezone: utc
+  sidecar:
+    dashboards:
+      # Load every ConfigMap with grafana_dashboard: "1", from every namespace (the app chart's
+      # dashboard lives in the app namespace).
+      label: grafana_dashboard
+      labelValue: '1'
+      searchNamespace: ALL
+  # Loki (loki-values.yaml) as a second data source. The fixed uid lets the dashboard's `logs`
+  # variable default to it.
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
+
+alertmanager:
+  alertmanagerSpec:
+    # The Discord webhook URL, from the Secret that `make kind-up` creates from a file outside
+    # the repo. Mounted at /etc/alertmanager/secrets/alertmanager-discord/url.
+    secrets:
+      - alertmanager-discord
+  config:
+    global:
+      resolve_timeout: 5m
+    # docs/09 "Alerts": warning and critical go to the chat channel, grouped by alert name, and
+    # the channel also gets the recovery. info stays in the UI.
+    route:
+      receiver: 'null'
+      group_by: ['alertname', 'namespace']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # Watchdog always fires on purpose: it proves the alert pipeline works. Never send it.
+        - receiver: 'null'
+          matchers:
+            - alertname = "Watchdog"
+        - receiver: discord
+          matchers:
+            - severity =~ "warning|critical"
+    receivers:
+      - name: 'null'
+      - name: discord
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/url
+            send_resolved: true
+    # The chart's default inhibit rules (a critical alert hides the warning and info alerts with
+    # the same name in the same namespace). Setting `config` replaces the defaults, so keep them.
+    inhibit_rules:
+      - source_matchers: ['severity = critical']
+        target_matchers: ['severity =~ warning|info']
+        equal: ['namespace', 'alertname']
+      - source_matchers: ['severity = warning']
+        target_matchers: ['severity = info']
+        equal: ['namespace', 'alertname']
+      - source_matchers: ['alertname = InfoInhibitor']
+        target_matchers: ['severity = info']
+        equal: ['namespace']
+      - target_matchers: ['alertname = InfoInhibitor']
+    templates:
+      - '/etc/alertmanager/config/*.tmpl'

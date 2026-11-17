@@ -1,0 +1,15 @@
+# kind (make kind-deploy). The images are loaded with `kind load docker-image`, so Kubernetes
+# must never try to pull them from a registry.
+image:
+  pullPolicy: Never
+
+config:
+  chainId: '31337'
+  # The first contract that anvil's first account deploys always has this address.
+  tokenAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+  startBlock: '1'
+
+# The Gateway from deploy/local/gateway.yaml.
+gateway:
+  name: gapless-gateway
+  namespace: envoy-gateway-system

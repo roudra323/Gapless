@@ -17,6 +17,7 @@ A resilient ERC-20 `Transfer` indexer and read API: no gaps, no duplicates, surv
 | [07](docs/07-infrastructure.md)          | Docker, Kubernetes, Helm, Terraform                |
 | [08](docs/08-ci-cd.md)                   | CI/CD                                              |
 | [09](docs/09-observability.md)           | Metrics, alerts, dashboards, logs                  |
+| [review](docs/review-findings.md)        | Review findings to fix in Phase 10                 |
 | [adr/](docs/adr/)                        | Architecture decision records                      |
 
 ## Keeping docs in sync

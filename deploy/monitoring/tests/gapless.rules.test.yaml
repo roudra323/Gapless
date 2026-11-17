@@ -1,0 +1,232 @@
+# Unit tests for the alert rules (`make rules-test`, promtool test rules).
+# Each alert has a case where it fires and a case where it must stay quiet.
+# Series notation: 'a+bxN' = start at a, add b, N more samples (one per interval).
+rule_files:
+  - ../../helm/gapless/rules/gapless.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # IndexerLagHigh: fires only when the lag stays above 50 for 5 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_indexer_lag_blocks{namespace="gapless"}'
+        values: '60x10'
+      - series: 'gapless_indexer_lag_blocks{namespace="spike"}'
+        # Above 50 for 3 minutes only, then back to normal: no alert.
+        values: '60 60 60 5x7'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: IndexerLagHigh
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: IndexerLagHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: gapless }
+            exp_annotations:
+              summary: 'Indexer is 60 blocks behind the confirmed head'
+              description: 'gapless_indexer_lag_blocks has been above 50 for 5 minutes in gapless.'
+              runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#indexerlaghigh
+
+  # IndexerStalled: the head moves, the checkpoint does not.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_indexer_head_block{namespace="gapless"}'
+        values: '100+1x15'
+      - series: 'gapless_indexer_processed_block{namespace="gapless"}'
+        values: '95x15'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: IndexerStalled
+        exp_alerts:
+          - exp_labels: { severity: critical, namespace: gapless }
+            exp_annotations:
+              summary: 'Indexer checkpoint has not moved for 10 minutes'
+              description: 'The chain head changed but gapless_indexer_processed_block did not, in gapless.'
+              runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#indexerstalled
+
+  # IndexerStalled: a quiet chain (anvil mines only on demand) must not fire.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_indexer_head_block{namespace="gapless"}'
+        values: '100x15'
+      - series: 'gapless_indexer_processed_block{namespace="gapless"}'
+        values: '95x15'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: IndexerStalled
+        exp_alerts: []
+
+  # IndexerStalled: a healthy indexer that follows the head must not fire.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_indexer_head_block{namespace="gapless"}'
+        values: '100+1x15'
+      - series: 'gapless_indexer_processed_block{namespace="gapless"}'
+        values: '95+1x15'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: IndexerStalled
+        exp_alerts: []
+
+  # IndexerNoLeader: the indexer runs but is not the leader.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_indexer_is_leader{namespace="gapless", pod="indexer-a"}'
+        values: '1 1 0x8'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: IndexerNoLeader
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: IndexerNoLeader
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: 'No indexer holds the leader lock'
+              description: 'No indexer process has been the leader for 2 minutes, so nothing is indexed.'
+              runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#indexernoleader
+
+  # IndexerNoLeader: no indexer is scraped at all (the series is absent).
+  - interval: 1m
+    input_series:
+      - series: 'up{job="something-else"}'
+        values: '1x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: IndexerNoLeader
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: 'No indexer holds the leader lock'
+              description: 'No indexer process has been the leader for 2 minutes, so nothing is indexed.'
+              runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#indexernoleader
+
+  # IndexerNoLeader: one leader and one standby is the healthy state.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_indexer_is_leader{namespace="gapless", pod="indexer-a"}'
+        values: '1x5'
+      - series: 'gapless_indexer_is_leader{namespace="gapless", pod="indexer-b"}'
+        values: '0x5'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: IndexerNoLeader
+        exp_alerts: []
+
+  # IndexerWsDown: info only, after 5 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_indexer_ws_connected{namespace="gapless"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: IndexerWsDown
+        exp_alerts:
+          - exp_labels: { severity: info, namespace: gapless }
+            exp_annotations:
+              summary: 'Indexer WebSocket head feed is down'
+              description: 'gapless_indexer_ws_connected has been 0 for 5 minutes in gapless. Polling covers it.'
+              runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#indexerwsdown
+
+  # RpcErrorRateHigh: 30 % of calls fail (errors plus rate limits) for more than 10 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_rpc_requests_total{namespace="gapless", method="eth_getLogs", transport="http", result="ok"}'
+        values: '0+70x20'
+      - series: 'gapless_rpc_requests_total{namespace="gapless", method="eth_getLogs", transport="http", result="error"}'
+        values: '0+20x20'
+      - series: 'gapless_rpc_requests_total{namespace="gapless", method="eth_getLogs", transport="http", result="rate_limited"}'
+        values: '0+10x20'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: RpcErrorRateHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: gapless }
+            exp_annotations:
+              summary: '30% of RPC calls fail'
+              description: 'More than 20% of the indexer RPC calls failed or were rate limited for 10 minutes in gapless.'
+              runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#rpcerrorratehigh
+
+  # RpcErrorRateHigh: 5 % failures is normal noise.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_rpc_requests_total{namespace="gapless", method="eth_getLogs", transport="http", result="ok"}'
+        values: '0+95x20'
+      - series: 'gapless_rpc_requests_total{namespace="gapless", method="eth_getLogs", transport="http", result="error"}'
+        values: '0+5x20'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: RpcErrorRateHigh
+        exp_alerts: []
+
+  # ApiHighErrorRate: 10 % of requests are 5xx.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_http_requests_total{namespace="gapless", method="GET", route="/v1/stats", status_class="2xx"}'
+        values: '0+90x15'
+      - series: 'gapless_http_requests_total{namespace="gapless", method="GET", route="/v1/stats", status_class="5xx"}'
+        values: '0+10x15'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ApiHighErrorRate
+        exp_alerts:
+          - exp_labels: { severity: critical, namespace: gapless }
+            exp_annotations:
+              summary: '10% of API requests return 5xx'
+              description: 'More than 5% of API requests failed with a 5xx status for 5 minutes in gapless.'
+              runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#apihigherrorrate
+
+  # ApiHighErrorRate: 4xx answers are client mistakes, not our errors.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_http_requests_total{namespace="gapless", method="GET", route="unmatched", status_class="4xx"}'
+        values: '0+50x15'
+      - series: 'gapless_http_requests_total{namespace="gapless", method="GET", route="/v1/stats", status_class="2xx"}'
+        values: '0+50x15'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ApiHighErrorRate
+        exp_alerts: []
+
+  # ApiLatencyHigh: every request takes between 1 s and 2.5 s.
+  - interval: 1m
+    input_series:
+      - series: 'gapless_http_request_duration_seconds_bucket{namespace="gapless", method="GET", route="/v1/stats", le="0.5"}'
+        values: '0x20'
+      - series: 'gapless_http_request_duration_seconds_bucket{namespace="gapless", method="GET", route="/v1/stats", le="1"}'
+        values: '0x20'
+      - series: 'gapless_http_request_duration_seconds_bucket{namespace="gapless", method="GET", route="/v1/stats", le="2.5"}'
+        values: '0+10x20'
+      - series: 'gapless_http_request_duration_seconds_bucket{namespace="gapless", method="GET", route="/v1/stats", le="+Inf"}'
+        values: '0+10x20'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: ApiLatencyHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: gapless }
+            exp_annotations:
+              summary: 'API p95 latency is 2.425s'
+              description: 'The 95th percentile API request time has been above 0.5 s for 10 minutes in gapless.'
+              runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#apilatencyhigh
+
+  # PodRestartsHigh: 4 restarts in 30 minutes fires; restarts in another namespace do not.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="gapless", pod="gapless-indexer-x", container="indexer"}'
+        values: '0 1 2 3 4 4 4'
+      - series: 'kube_pod_container_status_restarts_total{namespace="other", pod="noisy", container="c"}'
+        values: '0 5 10 15 20 25 30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PodRestartsHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: gapless
+              pod: gapless-indexer-x
+              container: indexer
+            exp_annotations:
+              summary: 'Pod gapless-indexer-x restarted 4 times in 30 minutes'
+              description: 'Container indexer in gapless/gapless-indexer-x keeps restarting.'
+              runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#podrestartshigh

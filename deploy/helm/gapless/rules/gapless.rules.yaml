@@ -1,0 +1,109 @@
+# The Gapless alerts (docs/09 "Alerts"), in the plain Prometheus rule file format.
+# templates/prometheusrule.yaml puts this file into a PrometheusRule unchanged, and
+# `make rules-test` checks it with promtool (deploy/monitoring/tests/). Keep one source.
+#
+# Severity: critical and warning go to the chat channel (step 7); info stays in the UI.
+# Every alert links to its section in docs/runbooks.md.
+groups:
+  - name: gapless-indexer
+    rules:
+      - alert: IndexerLagHigh
+        expr: gapless_indexer_lag_blocks > 50
+        # A restart, a short RPC backoff or a burst of blocks can push the lag up for a moment.
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Indexer is {{ $value }} blocks behind the confirmed head'
+          description: 'gapless_indexer_lag_blocks has been above 50 for 5 minutes in {{ $labels.namespace }}.'
+          runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#indexerlaghigh
+
+      - alert: IndexerStalled
+        # The head moves but the checkpoint does not. changes(), not increase(): these are gauges,
+        # and a reorg rewind moves the checkpoint down. A quiet chain (no new heads) never fires.
+        expr: >-
+          changes(gapless_indexer_processed_block[10m]) == 0
+          and changes(gapless_indexer_head_block[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Indexer checkpoint has not moved for 10 minutes'
+          description: 'The chain head changed but gapless_indexer_processed_block did not, in {{ $labels.namespace }}.'
+          runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#indexerstalled
+
+      - alert: IndexerNoLeader
+        # absent(): if no indexer Pod is scraped at all, max() returns nothing and would never fire.
+        expr: max(gapless_indexer_is_leader) < 1 or absent(gapless_indexer_is_leader)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'No indexer holds the leader lock'
+          description: 'No indexer process has been the leader for 2 minutes, so nothing is indexed.'
+          runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#indexernoleader
+
+      - alert: IndexerWsDown
+        expr: gapless_indexer_ws_connected == 0
+        for: 5m
+        labels:
+          # The poll keeps the indexer working without the WebSocket (docs/03 "HeadTracker").
+          severity: info
+        annotations:
+          summary: 'Indexer WebSocket head feed is down'
+          description: 'gapless_indexer_ws_connected has been 0 for 5 minutes in {{ $labels.namespace }}. Polling covers it.'
+          runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#indexerwsdown
+
+      - alert: RpcErrorRateHigh
+        # Errors and rate limits together, as a share of all RPC calls.
+        expr: >-
+          sum by (namespace) (rate(gapless_rpc_requests_total{result!="ok"}[5m]))
+          / sum by (namespace) (rate(gapless_rpc_requests_total[5m]))
+          > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value | humanizePercentage }} of RPC calls fail'
+          description: 'More than 20% of the indexer RPC calls failed or were rate limited for 10 minutes in {{ $labels.namespace }}.'
+          runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#rpcerrorratehigh
+
+  - name: gapless-api
+    rules:
+      - alert: ApiHighErrorRate
+        expr: >-
+          sum by (namespace) (rate(gapless_http_requests_total{status_class="5xx"}[5m]))
+          / sum by (namespace) (rate(gapless_http_requests_total[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: '{{ $value | humanizePercentage }} of API requests return 5xx'
+          description: 'More than 5% of API requests failed with a 5xx status for 5 minutes in {{ $labels.namespace }}.'
+          runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#apihigherrorrate
+
+      - alert: ApiLatencyHigh
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (namespace, le) (rate(gapless_http_request_duration_seconds_bucket[5m])))
+          > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'API p95 latency is {{ $value | humanizeDuration }}'
+          description: 'The 95th percentile API request time has been above 0.5 s for 10 minutes in {{ $labels.namespace }}.'
+          runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#apilatencyhigh
+
+  - name: gapless-platform
+    rules:
+      - alert: PodRestartsHigh
+        expr: increase(kube_pod_container_status_restarts_total{namespace="gapless"}[30m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Pod {{ $labels.pod }} restarted {{ $value | humanize }} times in 30 minutes'
+          description: 'Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} keeps restarting.'
+          runbook_url: https://github.com/roudra323/Gapless/blob/main/docs/runbooks.md#podrestartshigh

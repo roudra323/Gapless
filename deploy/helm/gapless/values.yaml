@@ -1,0 +1,94 @@
+# Defaults: safe and production-like (docs/07 "Values files").
+# values-local.yaml (kind) and values-eks.yaml (EKS) override them.
+
+nameOverride: ''
+
+image:
+  # The git SHA of the build. Required, and never `latest` (docs/07 "Pod standards").
+  tag: ''
+  pullPolicy: IfNotPresent
+
+# The Secret with DATABASE_URL, RPC_HTTP_URL and RPC_WS_URL. The chart never creates it:
+# `make kind-up` does on kind, and the External Secrets Operator does on EKS.
+secretName: gapless-secrets
+
+# Non-secret env for both apps (docs/02 "Configuration"). Strings, because env values are strings.
+config:
+  logLevel: info
+  chainId: '' # required
+  tokenAddress: '' # required
+  startBlock: '' # required (indexer)
+  confirmations: '5'
+  batchSize: '2000'
+  pollIntervalMs: '4000'
+  blockTimeMs: '12000'
+  reorgRewindBlocks: '64'
+  # Must stay below terminationGracePeriodSeconds (30 s), see docs/03 "Graceful shutdown".
+  shutdownTimeoutMs: '20000'
+
+ports:
+  http: 3000
+  metrics: 9464
+
+api:
+  image:
+    repository: gapless-api
+  # Used only when autoscaling is off. With autoscaling on, the HPA owns the replica count.
+  replicas: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    # Percent of the CPU request (docs/07).
+    targetCPUUtilization: 70
+  # At least this many API Pods stay up during a voluntary disruption (a node drain).
+  pdb:
+    minAvailable: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    # No CPU limit on purpose: it causes throttling (docs/07 "Pod standards").
+    limits:
+      memory: 256Mi
+
+indexer:
+  image:
+    repository: gapless-indexer
+  # No replicas value on purpose: the indexer always runs 1 replica (docs/03 "Leader").
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+# The schema migrations run as a Helm hook Job, before the Deployments (docs/07).
+migrate:
+  # Keep a failed Job (and its Pod logs) this long for debugging. A successful Job is deleted
+  # at once by the hook delete policy.
+  ttlSecondsAfterFinished: 3600
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# The Gateway that the HTTPRoute attaches to. It is not part of this chart: `make kind-up`
+# creates it on kind, and Phase 9 on EKS.
+gateway:
+  name: '' # required
+  namespace: '' # required
+
+# Only the Gateway and Prometheus may connect to the app Pods (docs/07). Egress is not limited.
+networkPolicy:
+  enabled: true
+  # The namespace where kube-prometheus-stack runs Prometheus (step 6).
+  prometheusNamespace: monitoring
+
+# Prometheus scraping, alert rules and the Grafana dashboard (docs/09). These objects need the
+# kube-prometheus-stack CRDs, which `make kind-up` installs.
+monitoring:
+  enabled: true
+  scrapeInterval: 15s

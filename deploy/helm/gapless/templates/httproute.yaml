@@ -1,0 +1,22 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "gapless.fullname" . }}-api
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "api") | nindent 4 }}
+spec:
+  # The Gateway lives in another namespace. Its listener accepts routes from this namespace
+  # only (allowedRoutes in deploy/local/gateway.yaml).
+  parentRefs:
+    - name: {{ required "gateway.name is required" .Values.gateway.name }}
+      namespace: {{ required "gateway.namespace is required" .Values.gateway.namespace }}
+  rules:
+    # Only the public API. /healthz, /readyz and /metrics are on another port and never routed
+    # (docs/02 "Ports").
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - name: {{ include "gapless.fullname" . }}-api
+          port: {{ .Values.ports.http }}

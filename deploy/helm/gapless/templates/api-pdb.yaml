@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "gapless.fullname" . }}-api
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "api") | nindent 4 }}
+spec:
+  # A node drain evicts API Pods one by one and waits while fewer than this would stay up.
+  # No PDB for the indexer: it has 1 replica, and minAvailable: 1 would block every drain.
+  minAvailable: {{ .Values.api.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "gapless.selectorLabels" (dict "root" $ "component" "api") | nindent 6 }}

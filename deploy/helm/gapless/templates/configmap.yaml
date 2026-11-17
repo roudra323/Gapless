@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gapless.fullname" . }}-config
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "config") | nindent 4 }}
+# Non-secret env for both apps (docs/02 "Configuration"). The three URLs live in the Secret.
+# Each app reads only its own keys; Zod ignores the rest.
+data:
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  APP_VERSION: {{ include "gapless.imageTag" . | quote }}
+  CHAIN_ID: {{ required "config.chainId is required" .Values.config.chainId | quote }}
+  TOKEN_ADDRESS: {{ required "config.tokenAddress is required" .Values.config.tokenAddress | quote }}
+  START_BLOCK: {{ required "config.startBlock is required" .Values.config.startBlock | quote }}
+  CONFIRMATIONS: {{ .Values.config.confirmations | quote }}
+  BATCH_SIZE: {{ .Values.config.batchSize | quote }}
+  POLL_INTERVAL_MS: {{ .Values.config.pollIntervalMs | quote }}
+  BLOCK_TIME_MS: {{ .Values.config.blockTimeMs | quote }}
+  REORG_REWIND_BLOCKS: {{ .Values.config.reorgRewindBlocks | quote }}
+  SHUTDOWN_TIMEOUT_MS: {{ .Values.config.shutdownTimeoutMs | quote }}
+  PORT: {{ .Values.ports.http | quote }}
+  METRICS_PORT: {{ .Values.ports.metrics | quote }}

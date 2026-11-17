@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "gapless.fullname" . }}-migrate
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "migrate") | nindent 4 }}
+  annotations:
+    # Run before the first install and before every upgrade, so the tables exist before any
+    # new Pod starts. A failed Job stops the release: the old Pods keep running.
+    helm.sh/hook: pre-install,pre-upgrade
+    # Delete the old Job before a new one, and delete a successful Job at once.
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: {{ .Values.migrate.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "gapless.selectorLabels" (dict "root" $ "component" "migrate") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      # A pre-install hook runs before the chart's other objects exist, so it cannot use the
+      # ConfigMap or a chart ServiceAccount. It uses the namespace's default one, with no token.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          # The indexer image holds the migrate entrypoint and the SQL files (docs/07 "Docker").
+          image: {{ printf "%s:%s" .Values.indexer.image.repository (include "gapless.imageTag" .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The image ENTRYPOINT is node, so this is the script to run.
+          args: [node_modules/@gapless/db/dist/bin/migrate.js]
+          env:
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: APP_VERSION
+              value: {{ include "gapless.imageTag" . | quote }}
+          # DATABASE_URL. The Secret exists before the chart (make kind-up, or ESO on EKS).
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secretName }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml .Values.migrate.resources | nindent 12 }}

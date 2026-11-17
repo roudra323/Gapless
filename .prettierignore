@@ -5,3 +5,5 @@ contracts/dependencies/
 contracts/out/
 packages/db/migrations/
 .claude/
+# Helm templates are Go templates, not YAML (checked by helm lint and kubeconform instead).
+deploy/helm/gapless/templates/

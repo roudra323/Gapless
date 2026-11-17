@@ -1,0 +1,22 @@
+{{- if .Values.monitoring.enabled }}
+{{- range $component := list "api" "indexer" }}
+---
+# Tells Prometheus to scrape the `metrics` port of every Pod behind this Service. Prometheus
+# selects every ServiceMonitor in the cluster (deploy/monitoring/kps-values.yaml), so no
+# special label is needed here.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "gapless.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" $component) | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "gapless.selectorLabels" (dict "root" $ "component" $component) | nindent 6 }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ $.Values.monitoring.scrapeInterval }}
+{{- end }}
+{{- end }}

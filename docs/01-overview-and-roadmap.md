@@ -43,7 +43,7 @@ Every phase should move toward making this demo work.
 
 Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N passes.**
 
-**Current status:** **Phase 7 done (2026-11-09).** Next: Phase 8 (local Kubernetes). Update this line when a phase passes.
+**Current status:** **Phase 8 done (2026-11-14).** Next: Phase 9 (AWS + deploy pipeline), starting with 9a (Terraform against Floci). Update this line when a phase passes.
 
 ### Phase 0 — Repo foundation
 
@@ -117,7 +117,8 @@ Two steps (`adr/0004`): **9a** writes and tests the Terraform against the local 
 
 - README with an architecture diagram, a demo GIF or video, a "what breaks and how it recovers" section, the cost notes, and a teardown guide.
 - `docs/postmortems/`: one postmortem from a real chaos drill (timeline, detection, alert, impact, recovery, follow-ups).
-- ✅ Done when someone unfamiliar can understand the project in 2 minutes from the README.
+- Fix every open finding in [`review-findings.md`](review-findings.md) (the review of Phases 0–8). Its "Phase 9 notes" are handled during Phase 9.
+- ✅ Done when someone unfamiliar can understand the project in 2 minutes from the README, and `review-findings.md` has no open item.
 
 ### Phase 11 — AKS port (optional)
 
