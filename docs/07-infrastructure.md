@@ -114,7 +114,7 @@ Cluster add-ons installed after Terraform via Helm (scripted in `make eks-bootst
 - `make floci-up` starts the pinned Floci container on `localhost:4566` (with the Docker socket mounted, because Floci starts real containers for EKS and RDS). `make floci-apply` runs `terraform init -reconfigure -backend-config=floci.s3.tfbackend` and `terraform apply` for `envs/dev` against it; `make floci-destroy` destroys it again; `make floci-down` stops the container.
 - `envs/dev/floci.s3.tfbackend` (committed, no secrets) points the S3 backend at a state bucket inside Floci, never at the real state bucket. Dummy credentials only.
 - The provider block switches only its endpoint and its credential and account-ID checks (`var.emulator`). Resources don't branch on the target, except where the coverage table below says a resource is unsupported.
-- Pin the k3s image used for Floci's EKS to the EKS minor version and the RDS image to Postgres 18, if Floci allows the override. Record it below if it doesn't.
+- Floci allows the image overrides, so `make floci-up` pins both: `FLOCI_SERVICES_EKS_IMAGE_TEMPLATE` (and `_DEFAULT_IMAGE`) to k3s `v1.37.2-k3s1` by digest, the EKS minor version (a template with no `%s` is used as it is for every cluster version), and `FLOCI_SERVICES_RDS_DEFAULT_POSTGRES_IMAGE` to the Postgres 18 image of `docker-compose.yml`. Its port is bound to `127.0.0.1` only, because Floci accepts any credentials. `make floci-down` uses `docker stop`: on a clean stop (SIGTERM) Floci removes the k3s and Postgres containers it started, and a `docker rm -f` (SIGKILL) would leave them behind. Floci keeps its state in memory, so a stop also clears every emulated resource and the Floci state bucket.
 
 #### Floci coverage
 
