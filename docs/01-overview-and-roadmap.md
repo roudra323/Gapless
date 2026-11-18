@@ -43,7 +43,7 @@ Every phase should move toward making this demo work.
 
 Each phase ends with acceptance criteria. **Don't start phase N+1 until phase N passes.**
 
-**Current status:** **Phase 8 done (2026-11-14).** Next: Phase 9 (AWS + deploy pipeline), starting with 9a (Terraform against Floci). Update this line when a phase passes.
+**Current status:** **Phase 9a done (2026-11-19):** the full AWS stack in Terraform, applied and destroyed against Floci locally and in CI. Next: 9b (the real AWS run and the deploy pipeline). Update this line when a phase passes.
 
 ### Phase 0 — Repo foundation
 

@@ -201,3 +201,44 @@ jobs:
       - run: make chart-lint
       # promtool from the pinned Prometheus image (the runner has Docker).
       - run: make rules-test
+
+  # Terraform (docs/08, adr/0004): fmt, validate and tflint, then apply and destroy envs/dev
+  # against the local Floci emulator, which starts real k3s and Postgres containers on the
+  # runner. No AWS credentials in this job.
+  terraform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # Path filter inside the job (not on the workflow), so the job always reports
+      # a status and branch protection can require it.
+      - id: changes
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+            || ! git diff --quiet "$BASE" HEAD -- infra/ Makefile .github/workflows/ci.yml; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changes.outputs.run == 'true'
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.2
+          # The wrapper adds outputs to every terraform call; the Makefile needs the plain binary.
+          terraform_wrapper: false
+      - if: steps.changes.outputs.run == 'true'
+        # The token only raises GitHub's rate limit for tflint's plugin download.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: make tf-check
+      - if: steps.changes.outputs.run == 'true'
+        run: make floci-apply
+      - if: steps.changes.outputs.run == 'true'
+        run: make floci-destroy
+      - if: always() && steps.changes.outputs.run == 'true'
+        run: make floci-down
