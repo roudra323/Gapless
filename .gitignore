@@ -37,3 +37,5 @@ deploy/helm/*/charts/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+# Floci runs keep their own provider cache and backend settings (make floci-apply)
+.terraform-floci/
