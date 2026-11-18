@@ -58,9 +58,25 @@ async function exactParity(): Promise<void> {
 describe('rpc chaos', () => {
   it('rpc-flaky: 30% of requests fail with 429, 500 or a reset; it retries with backoff', async () => {
     const faults: RequestFault[] = [429, 500, 'reset'];
+    // Batch requests (the ones with `eth_getLogs`) fail on a fixed pattern: the first two (so one
+    // step fails twice in a row and backs off longer), then every third, with the fault types in
+    // turn. Batches run one after another, so the pattern does not depend on timing, and every run
+    // has failed batches with each fault type. Picking them at random by request number did
+    // depend on timing: on a slow runner the startup checks and head polls used the whole fault
+    // window, and no batch failed.
+    let batchRequests = 0;
+    let batchFaults = 0;
     proxy.setHooks({
-      failRequest: (n) =>
-        n < 200 && random() < 0.3 ? faults[Math.floor(random() * faults.length)] : undefined,
+      failRequest: ({ number, calls }) => {
+        if (calls.some((call) => call.method === 'eth_getLogs')) {
+          const i = batchRequests++;
+          return i < 2 || i % 3 === 0 ? faults[batchFaults++ % faults.length] : undefined;
+        }
+        // Every other request (head polls, startup checks): 30% at random, in the first 200.
+        return number < 200 && random() < 0.3
+          ? faults[Math.floor(random() * faults.length)]
+          : undefined;
+      },
     });
     const last = await world.token.sendTransfers(60, { perBlockMax: 4, random });
     await world.token.mine(2);
