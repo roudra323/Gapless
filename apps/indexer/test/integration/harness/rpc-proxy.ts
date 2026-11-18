@@ -16,9 +16,15 @@ export type CallAnswer =
 /** A fault for the whole HTTP request, before any call is looked at. */
 export type RequestFault = 429 | 500 | 'reset';
 
+/** One HTTP request to the proxy: its 0-based number and the calls in it (one, or a batch). */
+export type ProxyRequest = { readonly number: number; readonly calls: readonly RpcCall[] };
+
 export type RpcProxyHooks = {
-  /** Called once per HTTP request, with its 0-based number. Return a fault to fail it. */
-  failRequest?: (requestNumber: number) => RequestFault | undefined;
+  /**
+   * Called once per HTTP request. Return a fault to fail the whole request. The calls let a test
+   * pick requests by method, which does not depend on timing the way the request number does.
+   */
+  failRequest?: (request: ProxyRequest) => RequestFault | undefined;
   /** Called per call. Return an answer to replace the upstream one, or `undefined` to forward. */
   interceptCall?: (call: RpcCall) => CallAnswer | undefined;
 };
@@ -71,8 +77,9 @@ export async function startRpcProxy(
   const server: Server = createServer((req, res) => {
     void (async () => {
       const number = stats.requests++;
-      const body = await readBody(req);
-      const fault = hooks.failRequest?.(number);
+      const parsed = JSON.parse(await readBody(req)) as RpcCall | RpcCall[];
+      const calls = Array.isArray(parsed) ? parsed : [parsed];
+      const fault = hooks.failRequest?.({ number, calls });
       if (fault !== undefined) {
         stats.faults += 1;
         if (fault === 'reset') {
@@ -84,8 +91,6 @@ export async function startRpcProxy(
         return;
       }
 
-      const parsed = JSON.parse(body) as RpcCall | RpcCall[];
-      const calls = Array.isArray(parsed) ? parsed : [parsed];
       const own = new Map<RpcCall['id'], unknown>();
       const rest: RpcCall[] = [];
       for (const call of calls) {
