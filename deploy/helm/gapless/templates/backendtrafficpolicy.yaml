@@ -1,0 +1,26 @@
+# How Envoy talks to the API Pods (Envoy Gateway's BackendTrafficPolicy, docs/07 "Gateway").
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: {{ include "gapless.fullname" . }}-api
+  labels:
+    {{- include "gapless.labels" (dict "root" $ "component" "api") | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ include "gapless.fullname" . }}-api
+  timeout:
+    http:
+      # Envoy closes an idle upstream connection before the API does (the API keeps it 65 s,
+      # apps/api/src/http-server.ts). Otherwise Envoy can send a request on a connection at the
+      # moment the API closes it, and the client gets a 503 "UC".
+      connectionIdleTimeout: {{ required "gateway.upstreamIdleTimeout is required" .Values.gateway.upstreamIdleTimeout }}
+  retry:
+    # A second guard: retry when the connection to a Pod resets or cannot be made (a Pod that
+    # just stopped). Safe because every API route is a read-only GET (docs/02).
+    numRetries: {{ .Values.gateway.retries }}
+    retryOn:
+      triggers:
+        - reset
+        - connect-failure
