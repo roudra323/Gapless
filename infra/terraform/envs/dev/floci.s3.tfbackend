@@ -1,0 +1,12 @@
+# Backend settings for runs against the local Floci emulator (`make floci-apply`, adr/0004).
+# The state bucket is the one `bootstrap/` creates inside Floci, never the real one. The keys are
+# Floci's dummy values, not secrets.
+bucket                      = "gapless-tfstate-000000000000"
+region                      = "ap-south-1"
+endpoints                   = { s3 = "http://localhost:4566" }
+access_key                  = "test"
+secret_key                  = "test"
+skip_credentials_validation = true
+skip_requesting_account_id  = true
+skip_metadata_api_check     = true
+use_path_style              = true

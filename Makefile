@@ -181,3 +181,22 @@ floci-up: ## Start the local Floci AWS emulator (pinned image, localhost:4566; s
 .PHONY: floci-down
 floci-down: ## Stop Floci; on a clean stop it removes the k3s and Postgres containers it started
 	@docker stop --time 60 $(FLOCI_CONTAINER) >/dev/null 2>&1 && echo "Floci stopped." || echo "Floci is not running."
+
+TF_DIR := infra/terraform
+# Floci runs use their own data directory (provider cache, backend settings) and state, so they
+# never mix with a real AWS run in the same folder (adr/0004 rule 2).
+FLOCI_TF := TF_DATA_DIR=.terraform-floci terraform
+# Dummy values for the variables that a real run reads from terraform.tfvars (git-ignored).
+FLOCI_TF_VARS := -var emulator=true -var budget_alert_email=alerts@example.com
+
+.PHONY: floci-apply
+floci-apply: floci-up ## Create the state bucket and apply envs/dev against Floci (no real AWS)
+	cd $(TF_DIR)/bootstrap && $(FLOCI_TF) init -input=false -reconfigure -backend-config=path=floci.tfstate
+	cd $(TF_DIR)/bootstrap && $(FLOCI_TF) apply -input=false -auto-approve -var emulator=true
+	cd $(TF_DIR)/envs/dev && $(FLOCI_TF) init -input=false -reconfigure -backend-config=floci.s3.tfbackend
+	cd $(TF_DIR)/envs/dev && $(FLOCI_TF) apply -input=false -auto-approve $(FLOCI_TF_VARS)
+
+.PHONY: floci-destroy
+floci-destroy: ## Destroy envs/dev on Floci (the state bucket goes with `make floci-down`)
+	cd $(TF_DIR)/envs/dev && $(FLOCI_TF) init -input=false -reconfigure -backend-config=floci.s3.tfbackend
+	cd $(TF_DIR)/envs/dev && $(FLOCI_TF) destroy -input=false -auto-approve $(FLOCI_TF_VARS)

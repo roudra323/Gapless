@@ -72,7 +72,7 @@ make port-forward            # Grafana, Prometheus and Alertmanager to localhost
 make load                    # k6 load test against the gateway (HPA demo)
 # Phase 9
 make floci-up                # start the local Floci AWS emulator (pinned image, localhost:4566)
-make floci-apply             # terraform init (Floci backend) + apply for envs/dev against Floci
+make floci-apply             # create the state bucket in Floci (bootstrap/), then terraform init (Floci backend) + apply for envs/dev
 make floci-destroy           # terraform destroy for envs/dev against Floci
 make floci-down              # stop the Floci container
 make eks-bootstrap           # cluster add-ons via Helm (LB controller, Envoy Gateway, ESO, monitoring, Loki, Alloy)
