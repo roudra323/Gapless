@@ -26,3 +26,9 @@ variable "budget_alert_email" {
   description = "Email address for the budget alerts. Set it in terraform.tfvars (git-ignored)."
   type        = string
 }
+
+variable "vpc_cidr" {
+  description = "CIDR block of the VPC. The subnets are cut from it (network.tf)."
+  type        = string
+  default     = "10.0.0.0/16"
+}
