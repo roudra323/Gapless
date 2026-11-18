@@ -147,3 +147,37 @@ chart-lint: ## Lint the Helm chart and check the rendered manifests with kubecon
 	helm template gapless $(CHART) -n gapless -f $(CHART)/values-local.yaml --set image.tag=lint \
 		| kubeconform -strict -summary -kubernetes-version $(KUBE_VERSION) \
 			-schema-location default -schema-location '$(CRD_SCHEMAS)'
+
+# --- Phase 9a: Terraform against the local Floci AWS emulator (docs/07, adr/0004) ---
+# Floci (docs/04), pinned by digest. It starts real containers for EKS (k3s) and RDS (Postgres)
+# through the Docker socket, so their images are pinned here too.
+FLOCI_IMAGE := floci/floci:2.5.0@sha256:a0fbf944d7f338cc0856f1ef83831ea749ff2be71956eb7a7fce08fc21458e19
+FLOCI_CONTAINER := gapless-floci
+FLOCI_URL := http://localhost:4566
+# k3s for Floci's EKS, at the EKS minor (KUBE_VERSION). An image template without `%s` is used as
+# it is for every cluster version, so this pin always applies.
+FLOCI_K3S_IMAGE := rancher/k3s:v1.37.2-k3s1@sha256:21ea6e0fac4e3930c2ce8aa40ddd41a8b18cb3e9a0222c030dc005e7e88c4332
+# Postgres for Floci's RDS: the same pinned image as docker-compose.yml.
+FLOCI_POSTGRES_IMAGE := postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+
+.PHONY: floci-up
+floci-up: ## Start the local Floci AWS emulator (pinned image, localhost:4566; safe to rerun)
+	@if docker container inspect $(FLOCI_CONTAINER) >/dev/null 2>&1; then \
+		echo "Floci is already running."; \
+	else \
+		docker run -d --rm --name $(FLOCI_CONTAINER) -p 127.0.0.1:4566:4566 \
+			-v /var/run/docker.sock:/var/run/docker.sock \
+			-e FLOCI_SERVICES_EKS_IMAGE_TEMPLATE=$(FLOCI_K3S_IMAGE) \
+			-e FLOCI_SERVICES_EKS_DEFAULT_IMAGE=$(FLOCI_K3S_IMAGE) \
+			-e FLOCI_SERVICES_RDS_DEFAULT_POSTGRES_IMAGE=$(FLOCI_POSTGRES_IMAGE) \
+			$(FLOCI_IMAGE) >/dev/null; \
+	fi
+	@for i in $$(seq 1 30); do \
+		curl -sf $(FLOCI_URL)/_floci/health >/dev/null && { echo "Floci is up on $(FLOCI_URL)"; exit 0; }; \
+		sleep 1; \
+	done; \
+	echo "Floci did not become healthy in 30 s:"; docker logs --tail 20 $(FLOCI_CONTAINER); exit 1
+
+.PHONY: floci-down
+floci-down: ## Stop Floci; on a clean stop it removes the k3s and Postgres containers it started
+	@docker stop --time 60 $(FLOCI_CONTAINER) >/dev/null 2>&1 && echo "Floci stopped." || echo "Floci is not running."
