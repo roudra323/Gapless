@@ -75,6 +75,7 @@ make floci-up                # start the local Floci AWS emulator (pinned image,
 make floci-apply             # create the state bucket in Floci (bootstrap/), then terraform init (Floci backend) + apply for envs/dev
 make floci-destroy           # terraform destroy for envs/dev against Floci
 make floci-down              # stop the Floci container
+make tf-check                # terraform fmt -check, validate (both roots) and tflint
 make eks-bootstrap           # cluster add-ons via Helm (LB controller, Envoy Gateway, ESO, monitoring, Loki, Alloy)
 make eks-down                # remove the gateway (NLB), then terraform destroy for envs/dev (only when the user asks)
 ```
