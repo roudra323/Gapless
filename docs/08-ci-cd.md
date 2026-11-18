@@ -33,7 +33,7 @@ Uses a GitHub **Environment** `dev` (it holds non-secret vars: AWS account ID, r
 1. Authenticate to AWS via OIDC (`id-token: write`, `aws-actions/configure-aws-credentials`).
 2. Log in to ECR (`aws-actions/amazon-ecr-login`). Build and push both images, tagged with the **Git SHA**. Also push a provenance attestation (`docker/build-push-action` with `provenance: true`).
 3. `aws eks update-kubeconfig` for the cluster.
-4. `helm upgrade --install gapless deploy/helm/gapless -f values.yaml -f values-eks.yaml --set image.tag=$GITHUB_SHA --wait --timeout 10m` plus the rollback-on-failure flag. (Helm 4 renamed `--atomic` to `--rollback-on-failure`; confirm with `helm upgrade --help` for the installed version.)
+4. `helm upgrade --install gapless deploy/helm/gapless -f values.yaml -f values-eks.yaml --set-string image.tag=$GITHUB_SHA --wait --timeout 10m` plus the rollback-on-failure flag. (Helm 4 renamed `--atomic` to `--rollback-on-failure`; confirm with `helm upgrade --help` for the installed version.)
    - The migration Job runs as a pre-upgrade hook. If it fails, the release fails and the old pods keep serving.
 5. Smoke test: `curl` the public `/v1/stats` endpoint through the Gateway (the NLB hostname) and assert HTTP 200 and `lagBlocks` present.
 6. Write the deployed SHA and image digests to the job summary.
