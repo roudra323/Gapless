@@ -32,3 +32,37 @@ variable "vpc_cidr" {
   type        = string
   default     = "10.0.0.0/16"
 }
+
+variable "kubernetes_version" {
+  description = "EKS Kubernetes minor version, in standard support (docs/04; the kind cluster uses the same minor)."
+  type        = string
+  default     = "1.37"
+}
+
+variable "node_instance_types" {
+  description = "Spot instance types for the node group. Two types give Spot more capacity pools (docs/07)."
+  type        = list(string)
+  default     = ["t3.medium", "t3a.medium"]
+}
+
+variable "node_scaling" {
+  description = "Size of the Spot node group."
+  type = object({
+    min     = number
+    desired = number
+    max     = number
+  })
+  default = { min = 1, desired = 2, max = 3 }
+}
+
+variable "github_repository" {
+  description = "The GitHub repository (owner/name) whose main branch may assume the deployer role."
+  type        = string
+  default     = "roudra323/Gapless"
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class: the smallest burstable one (docs/07)."
+  type        = string
+  default     = "db.t4g.micro"
+}
