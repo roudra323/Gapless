@@ -123,9 +123,9 @@ Fill this in during the Phase 9a spike (`adr/0004` rule 3). "Checked only on AWS
 | Resource                            | Works on Floci? | Notes                                                                                                     |
 | ----------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------- |
 | VPC, subnets, SGs, internet gateway | to check        |                                                                                                           |
-| ECR                                 | to check        |                                                                                                           |
+| ECR                                 | yes             | 2 repositories (immutable tags, scan on push) and their lifecycle policies                                |
 | RDS                                 | to check        |                                                                                                           |
-| Secrets Manager                     | to check        |                                                                                                           |
+| Secrets Manager                     | yes             | 3 empty secrets; values are set outside Terraform                                                         |
 | Budget                              | yes             | `CreateBudget` with 3 notifications; needs the real account ID from STS (no `skip_requesting_account_id`) |
 | EKS + node group                    | to check        |                                                                                                           |
 | EKS access entries, Pod Identity    | to check        | Checked only on AWS (IAM is not enforced on Floci)                                                        |
