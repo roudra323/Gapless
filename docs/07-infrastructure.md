@@ -111,26 +111,26 @@ Cluster add-ons installed after Terraform via Helm (scripted in `make eks-bootst
 
 ### Local runs against Floci (Phase 9a)
 
-- `make floci-up` starts the pinned Floci container on `localhost:4566` (with the Docker socket mounted, because Floci starts real containers for EKS and RDS). `make floci-apply` runs `terraform init -reconfigure -backend-config=floci.s3.tfbackend` and `terraform apply` for `envs/dev` against it; `make floci-destroy` destroys it again; `make floci-down` stops the container.
+- `make floci-up` starts the pinned Floci container on `localhost:4566` (with the Docker socket mounted, because Floci starts real containers for EKS and RDS). `make floci-apply` first applies `bootstrap/` against it (local state in `bootstrap/floci.tfstate`, git-ignored), which creates the state bucket inside Floci, then runs `terraform init -reconfigure -backend-config=floci.s3.tfbackend` and `terraform apply` for `envs/dev`. Both use `TF_DATA_DIR=.terraform-floci`, so a Floci run never reuses the provider cache or backend settings of a real run; `make floci-destroy` destroys it again; `make floci-down` stops the container.
 - `envs/dev/floci.s3.tfbackend` (committed, no secrets) points the S3 backend at a state bucket inside Floci, never at the real state bucket. Dummy credentials only.
-- The provider block switches only its endpoint and its credential and account-ID checks (`var.emulator`). Resources don't branch on the target, except where the coverage table below says a resource is unsupported.
+- The provider block switches only its endpoints, its credentials (Floci's dummy `test` keys, which also override any real AWS login on the machine) and the EC2 metadata lookup (`var.emulator`). Floci answers STS like AWS, so the credential and account-ID checks stay on (the budget needs the account ID). **Every service the code calls must be listed in `endpoints`**: an unlisted one (for example `s3control`, which the provider uses for bucket tags) goes to real AWS. Resources don't branch on the target, except where the coverage table below says a resource is unsupported.
 - Floci allows the image overrides, so `make floci-up` pins both: `FLOCI_SERVICES_EKS_IMAGE_TEMPLATE` (and `_DEFAULT_IMAGE`) to k3s `v1.37.2-k3s1` by digest, the EKS minor version (a template with no `%s` is used as it is for every cluster version), and `FLOCI_SERVICES_RDS_DEFAULT_POSTGRES_IMAGE` to the Postgres 18 image of `docker-compose.yml`. Its port is bound to `127.0.0.1` only, because Floci accepts any credentials. `make floci-down` uses `docker stop`: on a clean stop (SIGTERM) Floci removes the k3s and Postgres containers it started, and a `docker rm -f` (SIGKILL) would leave them behind. Floci keeps its state in memory, so a stop also clears every emulated resource and the Floci state bucket.
 
 #### Floci coverage
 
 Fill this in during the Phase 9a spike (`adr/0004` rule 3). "Checked only on AWS" means a pass on Floci proves nothing about it.
 
-| Resource                            | Works on Floci? | Notes                                              |
-| ----------------------------------- | --------------- | -------------------------------------------------- |
-| VPC, subnets, SGs, internet gateway | to check        |                                                    |
-| ECR                                 | to check        |                                                    |
-| RDS                                 | to check        |                                                    |
-| Secrets Manager                     | to check        |                                                    |
-| Budget                              | to check        |                                                    |
-| EKS + node group                    | to check        |                                                    |
-| EKS access entries, Pod Identity    | to check        | Checked only on AWS (IAM is not enforced on Floci) |
-| GitHub OIDC provider + role         | to check        | The trust from GitHub is checked only on AWS       |
-| NLB from the LB Controller          | n/a             | Not in Terraform; checked only on AWS              |
+| Resource                            | Works on Floci? | Notes                                                                                                     |
+| ----------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------- |
+| VPC, subnets, SGs, internet gateway | to check        |                                                                                                           |
+| ECR                                 | to check        |                                                                                                           |
+| RDS                                 | to check        |                                                                                                           |
+| Secrets Manager                     | to check        |                                                                                                           |
+| Budget                              | yes             | `CreateBudget` with 3 notifications; needs the real account ID from STS (no `skip_requesting_account_id`) |
+| EKS + node group                    | to check        |                                                                                                           |
+| EKS access entries, Pod Identity    | to check        | Checked only on AWS (IAM is not enforced on Floci)                                                        |
+| GitHub OIDC provider + role         | to check        | The trust from GitHub is checked only on AWS                                                              |
+| NLB from the LB Controller          | n/a             | Not in Terraform; checked only on AWS                                                                     |
 
 ### Cost discipline
 
