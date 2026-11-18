@@ -80,6 +80,12 @@ migrate:
 gateway:
   name: '' # required
   namespace: '' # required
+  # Envoy closes idle connections to the API Pods after this time. Must stay below the API's
+  # keep-alive timeout (65 s, apps/api/src/http-server.ts), so Envoy closes them, not the API.
+  upstreamIdleTimeout: 60s
+  # Retries when a connection to an API Pod resets or fails. Only safe while every API route is
+  # a read-only GET (docs/02).
+  retries: 1
 
 # Only the Gateway and Prometheus may connect to the app Pods (docs/07). Egress is not limited.
 networkPolicy:

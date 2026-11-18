@@ -13,9 +13,12 @@
 {{- end -}}
 {{- end -}}
 
-{{/* The image tag: required, and never `latest` (docs/07 "Pod standards"). */}}
+{{/*
+The image tag: required, and never `latest` (docs/07 "Pod standards"). toString, because a short
+SHA with only digits (for example 3383603) arrives as a number from `--set` or a values file.
+*/}}
 {{- define "gapless.imageTag" -}}
-{{- $tag := required "image.tag is required (the git SHA)" .Values.image.tag -}}
+{{- $tag := toString (required "image.tag is required (the git SHA)" .Values.image.tag) -}}
 {{- if eq $tag "latest" -}}
 {{- fail "image.tag must be a git SHA, not latest" -}}
 {{- end -}}

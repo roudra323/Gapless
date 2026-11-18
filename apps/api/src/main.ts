@@ -10,6 +10,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
 
 import { AppModule, SERVICE_NAME } from './app.module.js';
+import { configureHttpServer } from './http-server.js';
 import { LifecycleService } from './lifecycle.service.js';
 
 const SHUTDOWN_SIGNALS = ['SIGTERM', 'SIGINT'];
@@ -76,6 +77,8 @@ async function main(): Promise<number> {
     // the health server and the pool close. `useProcessExit` makes Nest end with exit code 0.
     app.enableShutdownHooks(SHUTDOWN_SIGNALS, { useProcessExit: true });
     armShutdownTimeout(config);
+    // Keep idle connections open longer than the proxy in front does (http-server.ts).
+    configureHttpServer(app.getHttpServer());
 
     await app.listen(config.PORT, '0.0.0.0');
     // The bound port, not config.PORT: with PORT=0 the OS picks one.

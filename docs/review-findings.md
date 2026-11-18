@@ -210,7 +210,7 @@ Readiness depends on the DB, so a DB outage makes every API Pod unready and clie
 
 #### API-4: Node's HTTP keep-alive timeout is shorter than Envoy's
 
-- [ ] Fixed
+- [x] Fixed: both. The API sets `keepAliveTimeout` 65 s and `headersTimeout` 66 s (`apps/api/src/http-server.ts`), and the chart's `BackendTrafficPolicy` sets Envoy's upstream idle timeout to 60 s, with 1 retry on `reset` and `connect-failure` (`docs/07`).
 
 `main.ts:80` only calls `app.listen`. Node closes idle sockets after 5 s, which is shorter than Envoy's default upstream idle timeout, a known source of occasional "upstream connection reset" 503s.
 

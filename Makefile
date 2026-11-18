@@ -117,7 +117,7 @@ kind-deploy: ## Build both images, load them into kind, and deploy the chart (lo
 	docker build -f apps/api/Dockerfile --build-arg GIT_SHA=$(IMAGE_TAG) -t gapless-api:$(IMAGE_TAG) .
 	kind load docker-image gapless-indexer:$(IMAGE_TAG) gapless-api:$(IMAGE_TAG) --name $(KIND_CLUSTER)
 	$(HELM) upgrade --install gapless $(CHART) -n gapless -f $(CHART)/values-local.yaml \
-		--set image.tag=$(IMAGE_TAG) --wait --timeout 5m
+		--set-string image.tag=$(IMAGE_TAG) --wait --timeout 5m
 	@echo "Deployed $(IMAGE_TAG). API: http://localhost:8080/v1/stats"
 
 .PHONY: load
