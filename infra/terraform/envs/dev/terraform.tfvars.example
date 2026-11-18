@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars (git-ignored) for a real AWS run. Floci runs need no file: the
+# Makefile passes dummy values.
+budget_alert_email = "you@example.com"
+
+# Optional; the defaults are in variables.tf.
+# budget_limit_usd  = 20
+# region            = "ap-south-1"
+# github_repository = "owner/name"

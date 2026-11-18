@@ -200,3 +200,17 @@ floci-apply: floci-up ## Create the state bucket and apply envs/dev against Floc
 floci-destroy: ## Destroy envs/dev on Floci (the state bucket goes with `make floci-down`)
 	cd $(TF_DIR)/envs/dev && $(FLOCI_TF) init -input=false -reconfigure -backend-config=floci.s3.tfbackend
 	cd $(TF_DIR)/envs/dev && $(FLOCI_TF) destroy -input=false -auto-approve $(FLOCI_TF_VARS)
+
+# tflint and its AWS ruleset (infra/terraform/.tflint.hcl), pinned (docs/04). Homebrew core
+# dropped tflint after its BUSL license change, so it runs from the official image.
+TFLINT_IMAGE := ghcr.io/terraform-linters/tflint:v0.66.0@sha256:65b9944a9274c4989492c1d79998c2801664bf8a55fddb4bd3a9e6d73a006ddc
+
+.PHONY: tf-check
+tf-check: ## Check the Terraform code: fmt, validate (both roots) and tflint
+	terraform fmt -check -recursive $(TF_DIR)
+	@for root in bootstrap envs/dev; do \
+		echo "validate $$root"; \
+		(cd $(TF_DIR)/$$root && terraform init -input=false -backend=false >/dev/null && terraform validate -no-color) || exit 1; \
+	done
+	docker run --rm -v "$(CURDIR)/$(TF_DIR):/data" -w /data -e GITHUB_TOKEN --entrypoint sh $(TFLINT_IMAGE) \
+		-c 'tflint --init --config /data/.tflint.hcl >/dev/null && tflint --recursive --config /data/.tflint.hcl'
